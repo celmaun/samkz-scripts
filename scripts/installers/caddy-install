@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # vim:set ft=bash ts=4 sw=4 et :
 # shellcheck shell=bash
+# shellcheck disable=SC2317
 
 set -a
 
@@ -99,7 +100,7 @@ caddy_install() (
        done
      )"}"
      USER_BIN_DIR="${USER_BIN_DIR:-"$HOME/bin"}";
-     [ -d "$USER_BIN_DIR" ] || mkdir "$USER_BIN_DIR" || exit "$?$(>&2 printf 'ERROR[%d]: %s\n' "$?" mkdir "$USER_BIN_DIR")"
+     [ -d "$USER_BIN_DIR" ] || mkdir "$USER_BIN_DIR" || exit "$?$(>&2 printf 'ERROR[%d]: %s\n' "$?" "mkdir $USER_BIN_DIR")"
      USER_BIN_DIR="$(readlink -f -- "${USER_BIN_DIR:?}")" || exit; export USER_BIN_DIR
      case ":$PATH:" in *:"${USER_BIN_DIR:?}":*);; *) PATH="${USER_BIN_DIR}${PATH:+:$PATH}";; esac;
   }

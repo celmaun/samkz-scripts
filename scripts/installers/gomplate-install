@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # vim:set ft=bash ts=4 sw=4 et :
 # shellcheck shell=bash
+# shellcheck disable=SC2317
 
 set -a
 
@@ -14,8 +15,7 @@ canon_exe() { [ -n "$1" ] && [ -f "$1" ] && [ -x "$1" ] && readlink -f -- "$1"; 
 
 gomplate_install() (
 
-  set -a
-  RELEASES_URL_PREFIX="https://github.com/hairyhenderson/gomplate/releases"
+  RELEASES_URL_PREFIX="https://github.com/hairyhenderson/gomplate/releases"; export RELEASES_URL_PREFIX
 
   OS="windows"
   case "$(uname -s)" in
@@ -31,6 +31,11 @@ gomplate_install() (
     amd64 | x*"64") CPU_ARCH="amd64";;
   esac; : "${CPU_ARCH:?}"; export CPU_ARCH
 
+  set -a
+
+  is_binary() ( [ -f "${1:?}" ] && case "$(orex file "${1:?}")" in (*executable*) exit 0;; *) exit 1;; esac; )
+  is_shell_script() ( [ -f "${1:?}" ] && case "$(orex file "${1:?}")" in (*shell*script*) exit 0;; *) exit 1;; esac; )
+
   export__USER_BIN_DIR() {
     USER_BIN_DIR="${USER_BIN_DIR:-"$(
       set -- 'bin' '.bin' '.local/bin'
@@ -39,13 +44,14 @@ gomplate_install() (
       done
     )"}"
     USER_BIN_DIR="${USER_BIN_DIR:-"$HOME/bin"}";
-    [ -d "$USER_BIN_DIR" ] || mkdir "$USER_BIN_DIR" || exit "$?$(>&2 printf 'ERROR[%d]: %s\n' "$?" mkdir "$USER_BIN_DIR")"
+    [ -d "$USER_BIN_DIR" ] || mkdir "$USER_BIN_DIR" || exit "$?$(>&2 printf 'ERROR[%d]: %s\n' "$?" "mkdir $USER_BIN_DIR")"
     USER_BIN_DIR="$(readlink -f -- "${USER_BIN_DIR:?}")" || exit; export USER_BIN_DIR
     case ":$PATH:" in *:"${USER_BIN_DIR:?}":*);; *) PATH="${USER_BIN_DIR}${PATH:+:$PATH}";; esac;
   }
 
   _gomplate_main() {
-    #set -x
+    set +e -u
+
     orex export__USER_BIN_DIR
 
     INSTALLER_PRG="$([ -f "$0" ] && readlink -f -- "$0")"; orex [ "${INSTALLER_PRG##*/}" = "gomplate-install" ]
@@ -94,13 +100,17 @@ gomplate_install() (
   }
 
   _gomplate_setup() (
+
     orex chmod a+rx "${GOMPLATE_EXE:?}"
+
     if [ "$(uname -s)" = Darwin ]; then
-      2>/dev/null xattr -d com.apple.quarantine "${GOMPLATE_EXE:?}" ||:
+      >/dev/null 2>&1 xattr -d com.apple.quarantine "${GOMPLATE_EXE:?}" ||:
     fi
 
-    #orex mkdir -p "${HOME:?}/bin"
-    #orex ln -sf "${GOMPLATE_EXE:?}" "${HOME:?}/bin/"
+    orex is_binary "${GOMPLATE_EXE:?}"
+
+    orex export__USER_BIN_DIR
+    orex ln -sf "${GOMPLATE_EXE:?}" "${USER_BIN_DIR:?}/"
   )
 
   _gomplate_ensure_checksums() {
@@ -170,18 +180,6 @@ gomplate_install() (
     orex wget -O "${GOMPLATE_EXE:?}" "${DOWNLOAD_URL:?}"
     orex sha512sum -c "$sum_file"
   )
-
-   is_binary() (
-     file="$1"; [ -f "${file:?}" ] || exit
-     case "$(orex file "$file")" in *executable*) exit 0;; esac
-     exit 1
-   )
-
-   is_shell_script() (
-      file="$1"; [ -f "${file:?}" ] || exit
-      case "$(orex file "$file")" in *shell*script*) exit 0;; esac
-      exit 1
-   )
 
   set +a
 
