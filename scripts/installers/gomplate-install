@@ -1,0 +1,199 @@
+#!/usr/bin/env bash
+# vim:set ft=bash ts=4 sw=4 et :
+# shellcheck shell=bash
+
+set -a
+
+orex() { "$@" || exit "$?$(>&2 printf   'ERROR[%d]: %s\n' "$?" "$*")"; }
+oret() { "$@" || return "$?$(>&2 printf 'ERROR[%d]: %s\n' "$?" "$*")"; }
+quote() { printf '%s\n' "$1" | sed "s/'/'\\\\''/g;1s/^/'/;\$s/\$/'/" ; }
+
+canon_file() { [ -n "$1" ] && [ -f "$1" ] && readlink -f -- "$1"; }
+canon_dir() { [ -n "$1" ] && [ -d "$1" ] && readlink -f -- "$1"; }
+canon_exe() { [ -n "$1" ] && [ -f "$1" ] && [ -x "$1" ] && readlink -f -- "$1"; }
+
+gomplate_install() (
+
+  set -a
+  RELEASES_URL_PREFIX="https://github.com/hairyhenderson/gomplate/releases"
+
+  OS="windows"
+  case "$(uname -s)" in
+    *[Dd]arwin*) OS="mac";;
+    *[Ll]inux*)  OS="linux";;
+  esac; export OS
+
+  OS_K="$OS"; case $OS_K in mac*) OS_K=darwin;; esac; export OS_K
+
+  CPU_ARCH=
+  case "$(uname -m)" in
+    arm64 | aarch64* | armv8[bl]) CPU_ARCH="arm64";;
+    amd64 | x*"64") CPU_ARCH="amd64";;
+  esac; : "${CPU_ARCH:?}"; export CPU_ARCH
+
+  export__USER_BIN_DIR() {
+    USER_BIN_DIR="${USER_BIN_DIR:-"$(
+      set -- 'bin' '.bin' '.local/bin'
+      for d; do
+        d="$HOME/$d"; case ":$PATH:" in (*:"$d":*) printf %s "$d"; exit;; esac
+      done
+    )"}"
+    USER_BIN_DIR="${USER_BIN_DIR:-"$HOME/bin"}";
+    [ -d "$USER_BIN_DIR" ] || mkdir "$USER_BIN_DIR" || exit "$?$(>&2 printf 'ERROR[%d]: %s\n' "$?" mkdir "$USER_BIN_DIR")"
+    USER_BIN_DIR="$(readlink -f -- "${USER_BIN_DIR:?}")" || exit; export USER_BIN_DIR
+    case ":$PATH:" in *:"${USER_BIN_DIR:?}":*);; *) PATH="${USER_BIN_DIR}${PATH:+:$PATH}";; esac;
+  }
+
+  _gomplate_main() {
+    #set -x
+    orex export__USER_BIN_DIR
+
+    INSTALLER_PRG="$([ -f "$0" ] && readlink -f -- "$0")"; orex [ "${INSTALLER_PRG##*/}" = "gomplate-install" ]
+    INSTALLER_DIR="${INSTALLER_PRG%/*}"
+
+    GOMPLATE_EXE="${INSTALLER_DIR:?}/gomplate$(case $OS in (win*) printf %s '.exe';; esac)"
+
+    orex cd -P -- "${INSTALLER_DIR:?}"
+
+    INSTALLER_COMMAND="${1-install}"; : "${INSTALLER_COMMAND:?}"; export INSTALLER_COMMAND
+
+    case "${INSTALLER_COMMAND:?}" in
+      install)
+        >&2 printf '%s\n' "INFO: Installing gomplate"
+        ;;
+      reinstall)
+        >&2 printf '%s\n' "INFO: Reinstalling gomplate"
+        rm -f "${GOMPLATE_EXE:?}"
+        ;;
+      upgrade)
+        >&2 printf '%s\n' "INFO: Upgrading gomplate"
+        for f in ./gomplate_checksums-v*_sha512.txt; do rm -f "$f"; done
+        ;;
+      uninstall | remove | delete)
+         >&2 printf '%s\n' "INFO: Uninstalling gomplate"
+         rm -f "${GOMPLATE_EXE:?}"
+         for f in ./gomplate_checksums-v*_sha512.txt; do rm -f "$f"; done
+         exit 0
+        ;;
+      *)
+        >&2 printf '%s\n' "ERROR: Invalid command '$1'"; exit 1
+        ;;
+    esac
+
+    orex _gomplate_ensure_checksums
+
+    orex _gomplate_set_vars
+
+    orex _gomplate_download_prg
+
+    orex _gomplate_setup
+
+    orex is_binary "${GOMPLATE_EXE:?}"
+
+    orex "${GOMPLATE_EXE:?}" --version
+  }
+
+  _gomplate_setup() (
+    orex chmod a+rx "${GOMPLATE_EXE:?}"
+    if [ "$(uname -s)" = Darwin ]; then
+      2>/dev/null xattr -d com.apple.quarantine "${GOMPLATE_EXE:?}" ||:
+    fi
+
+    #orex mkdir -p "${HOME:?}/bin"
+    #orex ln -sf "${GOMPLATE_EXE:?}" "${HOME:?}/bin/"
+  )
+
+  _gomplate_ensure_checksums() {
+    export CHECKSUMS_FILE
+
+    [ -f "${CHECKSUMS_FILE-}" ] && [ -z "${CHECKSUMS_FILE##*/gomplate_checksums-v*_sha512.txt}" ] && return
+
+    CHECKSUMS_FILE=''
+    for CHECKSUMS_FILE in "${INSTALLER_DIR:?}"/gomplate_checksums-v*_sha512.txt; do :; done
+
+    [ -f "${CHECKSUMS_FILE-}" ] && return
+
+    >&2 printf '%s\n' 'WARN: Checksums file gomplate_checksums-v*_sha512.txt not found. Downloading latest release...'
+    version="$(orex _get_latest_release_version)" || exit
+
+    CHECKSUMS_FILE="${INSTALLER_DIR:?}/gomplate_checksums-v${version:?}_sha512.txt"
+
+    checksumsUrl="${RELEASES_URL_PREFIX:?}/download/v${version:?}/checksums-v${version:?}_sha512.txt"
+
+    orex wget -O "${CHECKSUMS_FILE:?}" "${checksumsUrl:?}"
+
+    orex [ -f "${CHECKSUMS_FILE:?}" ]
+  }
+
+  _gomplate_set_vars() {
+    : "${CHECKSUMS_FILE:?}"
+    # Put a gomplate_checksums-v*_sha512.txt file in same directory as this script. URL example:
+    # https://github.com/hairyhenderson/gomplate/releases/download/v3.11.5/checksums-v3.11.5_sha512.txt
+    # E.g.: 2.7.5   gomplate_checksums-v*_sha512.txt
+    PRG_VERSION="$(expr "${CHECKSUMS_FILE##*/}" : "gomplate_checksums-v\(.*\)_sha512\.txt")"; : "${PRG_VERSION:?}"; export PRG_VERSION
+
+    DOWNLOAD_EXE_NAME="gomplate_${OS_K:?}-${CPU_ARCH:?}$(case $OS in (win*) printf %s ".exe";; esac)"; export DOWNLOAD_EXE_NAME
+    DOWNLOAD_URL="${RELEASES_URL_PREFIX:?}/download/v${PRG_VERSION:?}/${DOWNLOAD_EXE_NAME:?}"; export DOWNLOAD_URL
+
+    CHECKSUM="$(grep -F "bin/${DOWNLOAD_EXE_NAME:?}" "${CHECKSUMS_FILE:?}")"
+    CHECKSUM="${CHECKSUM%% *}"; : "${CHECKSUM:?}"; export CHECKSUM
+  }
+
+  _get_redirect_dest_url() {
+    originalUrl="$1"; : "${originalUrl:?}" # $1 = Original URL
+    orex curl --head --silent --write-out "%{redirect_url}\n" --output /dev/null "${originalUrl:?}"
+  }
+
+  _get_latest_release_version() {
+    dest="$(orex _get_redirect_dest_url "${RELEASES_URL_PREFIX:?}/latest")" || exit
+    orex [ "${redirect:?}" != "${dest:?}" ]
+    # Example: https://github.com/abc/xyz/releases/tag/v2.7.5
+    version="${dest##*/releases/tag/v}"; orex [ "${dest:?}" != "${version:?}" ]
+    printf %s "${version:?}"
+  }
+
+  # macOS ???
+  # Run the following against the downloaded binary: xattr -d com.apple.quarantine
+  _gomplate_download_prg() (
+    sum_file="$(f="$(mktemp)" && printf "%s\n" "${CHECKSUM:?} ${GOMPLATE_EXE:?}" > "$f" && printf %s "$f")"
+
+    trap '${sum_file:+ rm -f "${sum_file:?}" };' EXIT INT HUP
+
+    if sha512sum -c "$sum_file" >/dev/null 2>&1; then
+      case $INSTALLER_COMMAND in
+        upgrade) >&2 printf '%s\n' "INFO: gomplate is already on the latest version";;
+      esac
+      exit 0
+    fi
+
+    rm -f "${GOMPLATE_EXE:?}"
+    orex wget -O "${GOMPLATE_EXE:?}" "${DOWNLOAD_URL:?}"
+    orex sha512sum -c "$sum_file"
+  )
+
+   is_binary() (
+     file="$1"; [ -f "${file:?}" ] || exit
+     case "$(orex file "$file")" in *executable*) exit 0;; esac
+     exit 1
+   )
+
+   is_shell_script() (
+      file="$1"; [ -f "${file:?}" ] || exit
+      case "$(orex file "$file")" in *shell*script*) exit 0;; esac
+      exit 1
+   )
+
+  set +a
+
+  orex _gomplate_main "$@"
+)
+
+set +a
+
+case "$([ -f "$0" ] && readlink -f -- "$0")" in
+  */gomplate-install) orex gomplate_install "$@" ;;
+  '') >&2 printf "ERROR[1]: Unable to locate \$0: '%s'\n" "$0"; exit 1;;
+  *) alias gomplate-install="gomplate_install" ;;
+esac
+
+
