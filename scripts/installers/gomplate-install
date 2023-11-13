@@ -19,22 +19,22 @@ gomplate_install() (
 
   OS="windows"
   case "$(uname -s)" in
-    *[Dd]arwin*) OS="mac";;
-    *[Ll]inux*)  OS="linux";;
+    (*[Dd]arwin*) OS="mac";;
+    (*[Ll]inux*)  OS="linux";;
   esac; export OS
 
-  OS_K="$OS"; case $OS_K in mac*) OS_K=darwin;; esac; export OS_K
+  OS_K="$OS"; case $OS_K in (mac*) OS_K=darwin;; esac; export OS_K
 
   CPU_ARCH=
   case "$(uname -m)" in
-    arm64 | aarch64* | armv8[bl]) CPU_ARCH="arm64";;
-    amd64 | x*"64") CPU_ARCH="amd64";;
+    ( arm64 | aarch64* | armv8[bl]) CPU_ARCH="arm64";;
+    ( amd64 | x*"64") CPU_ARCH="amd64";;
   esac; : "${CPU_ARCH:?}"; export CPU_ARCH
 
   set -a
 
-  is_binary() ( [ -f "${1:?}" ] && case "$(orex file "${1:?}")" in (*executable*) exit 0;; *) exit 1;; esac; )
-  is_shell_script() ( [ -f "${1:?}" ] && case "$(orex file "${1:?}")" in (*shell*script*) exit 0;; *) exit 1;; esac; )
+  is_binary() ( [ -f "${1:?}" ] && case "$(orex file "${1:?}")" in (*executable*) exit 0;; (*) exit 1;; esac; )
+  is_shell_script() ( [ -f "${1:?}" ] && case "$(orex file "${1:?}")" in (*shell*script*) exit 0;; (*) exit 1;; esac; )
 
   export__USER_BIN_DIR() {
     USER_BIN_DIR="${USER_BIN_DIR:-"$(
@@ -46,7 +46,7 @@ gomplate_install() (
     USER_BIN_DIR="${USER_BIN_DIR:-"$HOME/bin"}";
     [ -d "$USER_BIN_DIR" ] || mkdir "$USER_BIN_DIR" || exit "$?$(>&2 printf 'ERROR[%d]: %s\n' "$?" "mkdir $USER_BIN_DIR")"
     USER_BIN_DIR="$(readlink -f -- "${USER_BIN_DIR:?}")" || exit; export USER_BIN_DIR
-    case ":$PATH:" in *:"${USER_BIN_DIR:?}":*);; *) PATH="${USER_BIN_DIR}${PATH:+:$PATH}";; esac;
+    case ":$PATH:" in (*:"${USER_BIN_DIR:?}":*);; (*) PATH="${USER_BIN_DIR}${PATH:+:$PATH}";; esac;
   }
 
   _gomplate_main() {
@@ -64,24 +64,24 @@ gomplate_install() (
     INSTALLER_COMMAND="${1-install}"; : "${INSTALLER_COMMAND:?}"; export INSTALLER_COMMAND
 
     case "${INSTALLER_COMMAND:?}" in
-      install)
+      (install)
         >&2 printf '%s\n' "INFO: Installing gomplate"
         ;;
-      reinstall)
+      (reinstall)
         >&2 printf '%s\n' "INFO: Reinstalling gomplate"
         rm -f "${GOMPLATE_EXE:?}"
         ;;
-      upgrade)
+      (upgrade)
         >&2 printf '%s\n' "INFO: Upgrading gomplate"
         for f in ./gomplate_checksums-v*_sha512.txt; do rm -f "$f"; done
         ;;
-      uninstall | remove | delete)
+      (uninstall | remove | delete)
          >&2 printf '%s\n' "INFO: Uninstalling gomplate"
          rm -f "${GOMPLATE_EXE:?}"
          for f in ./gomplate_checksums-v*_sha512.txt; do rm -f "$f"; done
          exit 0
         ;;
-      *)
+      (*)
         >&2 printf '%s\n' "ERROR: Invalid command '$1'"; exit 1
         ;;
     esac
@@ -171,7 +171,7 @@ gomplate_install() (
 
     if sha512sum -c "$sum_file" >/dev/null 2>&1; then
       case $INSTALLER_COMMAND in
-        upgrade) >&2 printf '%s\n' "INFO: gomplate is already on the latest version";;
+        (upgrade) >&2 printf '%s\n' "INFO: gomplate is already on the latest version";;
       esac
       exit 0
     fi
@@ -189,9 +189,9 @@ gomplate_install() (
 set +a
 
 case "$([ -f "$0" ] && readlink -f -- "$0")" in
-  */gomplate-install) orex gomplate_install "$@" ;;
-  '') >&2 printf "ERROR[1]: Unable to locate \$0: '%s'\n" "$0"; exit 1;;
-  *) alias gomplate-install="gomplate_install" ;;
+  (*/gomplate-install) orex gomplate_install "$@" ;;
+  ('') >&2 printf "ERROR[1]: Unable to locate \$0: '%s'\n" "$0"; exit 1;;
+  (*) alias gomplate-install="gomplate_install" ;;
 esac
 
 
