@@ -23,7 +23,7 @@ gomplate_install() (
     (*[Ll]inux*)  OS="linux";;
   esac; export OS
 
-  OS_K="$OS"; case $OS_K in (mac*) OS_K=darwin;; esac; export OS_K
+  OS_K="$OS"; case "$OS_K" in (mac*) OS_K=darwin;; esac; export OS_K
 
   CPU_ARCH=
   case "$(uname -m)" in
@@ -33,14 +33,14 @@ gomplate_install() (
 
   set -a
 
-  is_binary() ( [ -f "${1:?}" ] && case "$(orex file "${1:?}")" in (*executable*) exit 0;; (*) exit 1;; esac; )
-  is_shell_script() ( [ -f "${1:?}" ] && case "$(orex file "${1:?}")" in (*shell*script*) exit 0;; (*) exit 1;; esac; )
+  is_binary() ( [ -f "${1:?}" ] || exit; case "$(orex file "${1:?}")" in (*executable*) exit 0;; (*) exit 1;; esac; )
+  is_shell_script() ( [ -f "${1:?}" ] || exit; case "$(orex file "${1:?}")" in (*shell*script*) exit 0;; (*) exit 1;; esac; )
 
   export__USER_BIN_DIR() {
     USER_BIN_DIR="${USER_BIN_DIR:-"$(
       set -- 'bin' '.bin' '.local/bin'
       for d; do
-        d="$HOME/$d"; case ":$PATH:" in (*:"$d":*) printf %s "$d"; exit;; esac
+        d="$HOME/$d"; case ":$PATH:" in (*:"$d":*) { printf %s "$d"; exit; } ;; esac
       done
     )"}"
     USER_BIN_DIR="${USER_BIN_DIR:-"$HOME/bin"}";
@@ -57,33 +57,34 @@ gomplate_install() (
     INSTALLER_PRG="$([ -f "$0" ] && readlink -f -- "$0")"; orex [ "${INSTALLER_PRG##*/}" = "gomplate-install" ]
     INSTALLER_DIR="${INSTALLER_PRG%/*}"
 
-    GOMPLATE_EXE="${INSTALLER_DIR:?}/gomplate$(case $OS in (win*) printf %s '.exe';; esac)"
+    ext=''; case "$OS" in (win*) ext='.exe';; esac
+    GOMPLATE_EXE="${INSTALLER_DIR:?}/gomplate${ext-}"
 
     orex cd -P -- "${INSTALLER_DIR:?}"
 
     INSTALLER_COMMAND="${1-install}"; : "${INSTALLER_COMMAND:?}"; export INSTALLER_COMMAND
 
     case "${INSTALLER_COMMAND:?}" in
-      (install)
+      (install) {
         >&2 printf '%s\n' "INFO: Installing gomplate"
-        ;;
-      (reinstall)
+      } ;;
+      (reinstall) {
         >&2 printf '%s\n' "INFO: Reinstalling gomplate"
         rm -f "${GOMPLATE_EXE:?}"
-        ;;
-      (upgrade)
+       } ;;
+      (upgrade) {
         >&2 printf '%s\n' "INFO: Upgrading gomplate"
         for f in ./gomplate_checksums-v*_sha512.txt; do rm -f "$f"; done
-        ;;
-      (uninstall | remove | delete)
+      } ;;
+      (uninstall | remove | delete) {
          >&2 printf '%s\n' "INFO: Uninstalling gomplate"
          rm -f "${GOMPLATE_EXE:?}"
          for f in ./gomplate_checksums-v*_sha512.txt; do rm -f "$f"; done
          exit 0
-        ;;
-      (*)
+       } ;;
+      (*) {
         >&2 printf '%s\n' "ERROR: Invalid command '$1'"; exit 1
-        ;;
+      } ;;
     esac
 
     orex _gomplate_ensure_checksums
@@ -142,7 +143,8 @@ gomplate_install() (
     # E.g.: 2.7.5   gomplate_checksums-v*_sha512.txt
     PRG_VERSION="$(expr "${CHECKSUMS_FILE##*/}" : "gomplate_checksums-v\(.*\)_sha512\.txt")"; : "${PRG_VERSION:?}"; export PRG_VERSION
 
-    DOWNLOAD_EXE_NAME="gomplate_${OS_K:?}-${CPU_ARCH:?}$(case $OS in (win*) printf %s ".exe";; esac)"; export DOWNLOAD_EXE_NAME
+    ext=''; case "$OS" in (win*) ext='.exe';; esac
+    DOWNLOAD_EXE_NAME="gomplate_${OS_K:?}-${CPU_ARCH:?}${ext-}"; export DOWNLOAD_EXE_NAME
     DOWNLOAD_URL="${RELEASES_URL_PREFIX:?}/download/v${PRG_VERSION:?}/${DOWNLOAD_EXE_NAME:?}"; export DOWNLOAD_URL
 
     CHECKSUM="$(grep -F "bin/${DOWNLOAD_EXE_NAME:?}" "${CHECKSUMS_FILE:?}")"
@@ -156,7 +158,6 @@ gomplate_install() (
 
   _get_latest_release_version() {
     dest="$(orex _get_redirect_dest_url "${RELEASES_URL_PREFIX:?}/latest")" || exit
-    orex [ "${redirect:?}" != "${dest:?}" ]
     # Example: https://github.com/abc/xyz/releases/tag/v2.7.5
     version="${dest##*/releases/tag/v}"; orex [ "${dest:?}" != "${version:?}" ]
     printf %s "${version:?}"
@@ -170,7 +171,7 @@ gomplate_install() (
     trap '${sum_file:+ rm -f "${sum_file:?}" };' EXIT INT HUP
 
     if sha512sum -c "$sum_file" >/dev/null 2>&1; then
-      case $INSTALLER_COMMAND in
+      case "$INSTALLER_COMMAND" in
         (upgrade) >&2 printf '%s\n' "INFO: gomplate is already on the latest version";;
       esac
       exit 0
@@ -190,7 +191,7 @@ set +a
 
 case "$([ -f "$0" ] && readlink -f -- "$0")" in
   (*/gomplate-install) orex gomplate_install "$@" ;;
-  ('') >&2 printf "ERROR[1]: Unable to locate \$0: '%s'\n" "$0"; exit 1;;
+  ('') { >&2 printf "ERROR[1]: Unable to locate \$0: '%s'\n" "$0"; exit 1; };;
   (*) alias gomplate-install="gomplate_install" ;;
 esac
 
