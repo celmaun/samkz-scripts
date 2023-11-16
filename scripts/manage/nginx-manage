@@ -1,0 +1,367 @@
+#!/usr/bin/env bash
+# vim:set ft=bash ts=4 sw=4 et :
+# shellcheck shell=bash
+# shellcheck disable=SC2317
+
+set -a
+
+orex() { "$@" || exit "$?$(>&2 printf   'ERROR[%d]: %s\n' "$?" "$*")"; }
+oret() { "$@" || return "$?$(>&2 printf 'ERROR[%d]: %s\n' "$?" "$*")"; }
+
+
+canon_file() { [ -n "$1" ] && [ -f "$1" ] && readlink -f -- "$1"; }
+canon_dir() { [ -n "$1" ] && [ -d "$1" ] && readlink -f -- "$1"; }
+canon_exe() { [ -n "$1" ] && [ -f "$1" ] && [ -x "$1" ] && readlink -f -- "$1"; }
+
+caddy_install() (
+  set -a
+  RELEASES_URL_PREFIX="https://github.com/caddyserver/caddy/releases"; export RELEASES_URL_PREFIX
+
+  OS="windows"
+  case "$(uname -s)" in
+    (*[Dd]arwin*) OS="mac";;
+    (*[Ll]inux*)  OS="linux";;
+  esac ; export OS
+
+  OS_K="$OS"; case "$OS_K" in (mac*) OS_K=darwin;; esac; export OS_K
+
+  CPU_ARCH=
+  case "$(uname -m)" in
+    ( arm64 | aarch64* | armv8[bl]) CPU_ARCH="arm64";;
+    ( amd64 | x*"64") CPU_ARCH="amd64";;
+  esac ; : "${CPU_ARCH:?}"; export CPU_ARCH
+
+  is_binary() ( [ -f "${1:?}" ] || exit; case "$(orex file "${1:?}")" in (*executable*) exit 0;; (*) exit 1;; esac; )
+  is_shell_script() ( [ -f "${1:?}" ] || exit; case "$(orex file "${1:?}")" in (*shell*script*) exit 0;; (*) exit 1;; esac; )
+  add_path() { [ -n "$1" ] && case ":$PATH:" in (*":$1:"*);; (*) PATH="${1}${PATH:+:$PATH}";; esac; }
+  quote() { printf '%s\n' "$1" | sed "s/'/'\\\\''/g;1s/^/'/;\$s/\$/'/" ; }
+
+  _caddy_main() {
+    set -u
+
+    orex export__USER_BIN_DIR
+
+    INSTALLER_PRG="$([ -f "$0" ] && readlink -f -- "$0")"; orex [ "${INSTALLER_PRG##*/}" = "caddy-install" ]
+    INSTALLER_DIR="${INSTALLER_PRG%/*}"
+
+    INSTALLER_COMMAND="${1-install}"; : "${INSTALLER_COMMAND:?}"; export INSTALLER_COMMAND
+
+    INSTALL_LOCATION="$HOME/caddy"
+
+    case "${INSTALLER_COMMAND:?}" in
+      (install) {
+        >&2 printf '%s\n' "INFO: Installing Caddy..."
+
+        orex cd -P -- "${INSTALLER_DIR:?}"
+
+        orex _caddy_ensure_checksums
+        orex _caddy_set_installer_vars
+        orex _caddy_install
+        orex _caddy_wrapper
+        orex _caddy_link
+
+        orex "${CADDY__CMD:?}" validate
+        orex "${CADDY__CMD:?}" version
+        exit
+      } ;;
+      (reinstall) {
+        >&2 printf '%s\n' "INFO: Reinstalling Caddy..."
+        >&2 printf '%s\n' "ERROR: Reinstalling Caddy isn't implemented yet"
+        exit 1
+      } ;;
+
+      (repair) {
+        >&2 printf '%s\n' "INFO: Repairing Caddy..."
+        >&2 printf '%s\n' "WARN: Repairing Caddy isn't fully implemented yet"
+        orex _caddy_set_vars
+        orex _caddy_wrapper
+        exit
+      };;
+      (upgrade) {
+        >&2 printf '%s\n' "INFO: Upgrading Caddy..."
+        for f in "${INSTALLER_DIR}"/caddy_*_checksums.txt; do rm -f "$f"; done
+        >&2 printf '%s\n' "WARN: Upgrading Caddy isn't fully implemented yet"
+        exit
+      };;
+        (uninstall | remove | delete) {
+          >&2 printf '%s\n' "INFO: Uninstalling Caddy"
+          >&2 printf '%s\n' "ERROR: Uninstalling Caddy isn't implemented yet"
+          exit 1
+        };;
+    esac
+
+    >&2 printf '%s\n' "ERROR: Invalid command '$1'"; exit 1
+  }
+
+  export__USER_BIN_DIR() {
+    USER_BIN_DIR="${USER_BIN_DIR:-"$(
+       set -- 'bin' '.bin' '.local/bin'
+       for d; do
+         d="$HOME/$d"; case ":$PATH:" in (*:"$d":*) { printf %s "$d"; exit; };; esac
+       done
+     )"}"
+     USER_BIN_DIR="${USER_BIN_DIR:-"$HOME/bin"}";
+     [ -d "$USER_BIN_DIR" ] || mkdir "$USER_BIN_DIR" || exit "$?$(>&2 printf 'ERROR[%d]: %s\n' "$?" "mkdir $USER_BIN_DIR")"
+     USER_BIN_DIR="$(readlink -f -- "${USER_BIN_DIR:?}")" || exit; export USER_BIN_DIR
+     case ":$PATH:" in (*:"${USER_BIN_DIR:?}":*);; (*) PATH="${USER_BIN_DIR}${PATH:+:$PATH}";; esac;
+  }
+
+  _caddy_link() (
+    export__USER_BIN_DIR
+    orex ln -sf "${CADDY__CMD:?}" "${USER_BIN_DIR:?}/caddy"
+  )
+
+  _caddy_ensure_checksums() {
+    for CHECKSUMS_FILE in "${INSTALLER_DIR:?}"/caddy_*_checksums.txt; do :; done
+
+    if [ -f "${CHECKSUMS_FILE-}" ]; then :; else
+      >&2 printf '%s\n' 'WARN: Checksums file caddy_*_checksums.txt not found. Downloading latest release...'
+      version="$(orex _get_latest_release_version)" || exit
+      CHECKSUMS_FILE="${INSTALLER_DIR:?}/caddy_${version:?}_checksums.txt"
+      checksumsUrl="${RELEASES_URL_PREFIX:?}/download/v${version:?}/caddy_${version:?}_checksums.txt"
+
+      orex wget -O "${CHECKSUMS_FILE:?}" "${checksumsUrl:?}"
+
+      orex [ -f "${CHECKSUMS_FILE:?}" ]
+    fi
+
+    export CHECKSUMS_FILE
+  }
+
+  _caddy_set_vars() {
+    CADDY__HOME="$HOME/caddy"; export CADDY__HOME
+    CADDY__CMD="${CADDY__HOME}/caddy"; export CADDY__CMD
+    CADDY__LOGS="${CADDY__HOME}/logs"; export CADDY__LOGS
+    CADDY__STORAGE="${CADDY__HOME}/storage"; export CADDY__STORAGE
+    CADDY__SITES="${CADDY__HOME}/sites-enabled"; export CADDY__SITES
+    CADDY__SITES_ALL="${CADDY__HOME}/sites-available"; export CADDY__SITES_ALL
+  }
+
+  _caddy_set_installer_vars() {
+    orex export__USER_BIN_DIR
+    orex _caddy_set_vars
+
+    # https://github.com/caddyserver/caddy/releases/download/v2.7.5/caddy_2.7.5_checksums.txt
+    # CHECKSUMS_FILE="$(orex find . -type f -maxdepth 1 -name 'caddy_*_checksums.txt' -print -quit)" || exit; export CHECKSUMS_FILE
+    # orex [ -f "${CHECKSUMS_FILE:?}" ]
+    # E.g.: 2.7.5
+    CADDY__VERSION="$(expr "${CHECKSUMS_FILE##*/}" : "caddy_\(.*\)_checksums\.txt")"; : "${CADDY__VERSION:?}"; export CADDY__VERSION
+
+    ext="tar.gz"; case "$OS" in (win*) ext="zip";; esac
+    ARCHIVE_NAME="caddy_${CADDY__VERSION}_${OS}_${CPU_ARCH}.${ext}"; export ARCHIVE_NAME
+
+    ARCHIVE_PATH="/tmp/${ARCHIVE_NAME:?}"
+
+    if [ -d "${APPDIR__SHARED-}" ]; then
+      ARCHIVE_PATH="${APPDIR__SHARED:?}/archives/${ARCHIVE_NAME:?}"
+    elif [ -d "${HOME:?}/Downloads" ]; then
+      ARCHIVE_PATH="${HOME:?}/Downloads/${ARCHIVE_NAME:?}"
+    fi
+    export ARCHIVE_PATH
+
+    CHECKSUM="$(grep -F "${ARCHIVE_NAME:?}" "${CHECKSUMS_FILE:?}")"
+    CHECKSUM="${CHECKSUM%% *}"; : "${CHECKSUM:?}"; export CHECKSUM
+
+    DOWNLOAD_URL="${RELEASES_URL_PREFIX:?}/download/v${CADDY__VERSION}/${ARCHIVE_NAME}"; export DOWNLOAD_URL
+
+  }
+
+  _get_redirect_dest_url() {
+    originalUrl="$1"; : "${originalUrl:?}" # $1 = Original URL
+    orex curl --head --silent --write-out "%{redirect_url}\n" --output /dev/null "${originalUrl:?}"
+  }
+
+  _get_latest_release_version() {
+    dest="$(orex _get_redirect_dest_url "${RELEASES_URL_PREFIX:?}/latest")" || exit
+    # Example: https://github.com/abc/xyz/releases/tag/v2.7.5
+    version="${dest##*/releases/tag/v}"; orex [ "${dest:?}" != "${version:?}" ]
+    printf %s "${version:?}"
+  }
+
+  # macOS ???
+  # Run the following against the downloaded binary: xattr -d com.apple.quarantine
+  _caddy_download_archive() (
+    sum_file="$(f="$(mktemp)" && printf "%s\n" "${CHECKSUM:?} ${ARCHIVE_PATH:?}" > "$f" && printf %s "$f")"
+
+    trap '${sum_file:+ rm -f "${sum_file:?}" };' EXIT INT HUP
+
+    sha512sum -c "$sum_file" >/dev/null 2>&1 && exit
+
+    rm -f "${ARCHIVE_PATH:?}"
+    # https://github.com/caddyserver/caddy/releases/download/v2.7.5/caddy_2.7.5_linux_amd64.tar.gz
+    # https://github.com/caddyserver/caddy/releases/download/v2.7.5/caddy_2.7.5_linux_arm64.tar.gz
+    # https://github.com/caddyserver/caddy/releases/download/v2.7.5/caddy_2.7.5_mac_amd64.tar.gz
+    # https://github.com/caddyserver/caddy/releases/download/v2.7.5/caddy_2.7.5_mac_arm64.tar.gz
+    # https://github.com/caddyserver/caddy/releases/download/v2.7.5/caddy_2.7.5_windows_amd64.zip
+    orex wget -O "${ARCHIVE_PATH:?}" "${DOWNLOAD_URL:?}"
+    orex sha512sum -c "$sum_file"
+  )
+
+  _caddy_create_dirs() (
+    set -u -- "${CADDY__HOME:?}" "${CADDY__LOGS:?}" "${CADDY__STORAGE:?}" "${CADDY__SITES:?}" "${CADDY__SITES_ALL:?}"
+
+    for dir; do
+      orex mkdir -p "${dir:?}"
+      orex touch "${dir:?}/.gitkeep"
+    done
+  )
+
+  _caddy_install() (
+    #install_dir="$HOME/.caddy-test/$OS-$ARCH"
+
+    if is_shell_script "${CADDY__CMD-}"; then
+      >&2 printf '%s\n' "Caddy already installed, skipping installation."; exit
+    fi
+
+    d="${CADDY__HOME:?}"
+
+    # rm -rf "${install_dir:?}"
+    [ -d "$d" ] && orex rmdir "${d:?}"
+
+    orex _caddy_create_dirs
+
+    orex _caddy_download_archive
+
+    orex cd -P -- "$d"
+
+    case "${ARCHIVE_PATH:?}" in
+      (*.tar.gz) orex tar -zxvf "${ARCHIVE_PATH:?}";;
+      (*.zip) orex unzip "${ARCHIVE_PATH:?}";;
+    esac
+
+    orex _caddy_gen_env
+
+  cat <<EOD > "${CADDY__HOME:?}/Caddyfile"
+
+{
+    storage file_system {\$CADDY__STORAGE}
+}
+
+import {\$CADDY__SITES}/*
+
+EOD
+
+  )
+
+  _caddy_gen_env() (
+    cat <<EOD > "${CADDY__HOME:?}/.env"
+HOME=$(quote "${HOME:?}")
+CADDY__HOME=$(quote "${CADDY__HOME:?}")
+CADDY__CMD=$(quote "${CADDY__CMD:?}")
+CADDY__LOGS=$(quote "${CADDY__LOGS:?}")
+CADDY__STORAGE=$(quote "${CADDY__STORAGE:?}")
+CADDY__SITES=$(quote "${CADDY__SITES:?}")
+CADDY__SITES_ALL=$(quote "${CADDY__SITES_ALL:?}")
+EOD
+  )
+
+  _caddy_wrapper() (
+    orex export__USER_BIN_DIR
+
+    if is_binary "${CADDY__CMD:?}"; then
+      if [ "$(uname -s)" = Darwin ]; then
+        >/dev/null 2>&1 xattr -d com.apple.quarantine "${CADDY__CMD:?}" ||:
+      fi
+
+      orex cp -a "${CADDY__CMD:?}" "${CADDY__HOME:?}/_caddy"
+    fi
+
+    orex is_binary "${CADDY__HOME:?}/_caddy"
+
+    cat <<'SH' > "${CADDY__CMD:?}"
+#!/usr/bin/env bash
+
+set -a
+orex() { "$@" || exit "$?$(>&2 printf 'ERROR[%d]: %s\n' "$?" "$*")"; }
+oret() { "$@" || return "$?$(>&2 printf 'ERROR[%d]: %s\n' "$?" "$*")"; }
+canon_exe() { [ -f "$1" ] && [ -x "$1" ] && readlink -f -- "$1"; }
+is_binary() ( [ -f "${1:?}" ] || exit; case "$(orex file "${1:?}")" in (*executable*) exit 0;; (*) exit 1;; esac; )
+add_path() { [ -n "$1" ] || exit; case ":$PATH:" in (*":$1:"*);; (*) PATH="${1}${PATH:+:$PATH}";; esac; }
+export__USER_BIN_DIR() {
+  USER_BIN_DIR="${USER_BIN_DIR:-"$(
+     set -- 'bin' '.bin' '.local/bin'
+     for d; do
+       d="$HOME/$d"; case ":$PATH:" in (*:"$d":*) { printf %s "$d"; exit; };; esac
+     done
+   )"}"
+   USER_BIN_DIR="${USER_BIN_DIR:-"$HOME/bin"}";
+   [ -d "$USER_BIN_DIR" ] || mkdir "$USER_BIN_DIR" || exit "$?$(>&2 printf 'ERROR[%d]: %s\n' "$?" mkdir "$USER_BIN_DIR")"
+   USER_BIN_DIR="$(readlink -f -- "${USER_BIN_DIR:?}")" || exit; export USER_BIN_DIR
+   case ":$PATH:" in (*:"${USER_BIN_DIR:?}":*);; (*) PATH="${USER_BIN_DIR}${PATH:+:$PATH}";; esac;
+}
+set +a
+
+set +e -u
+
+orex export__USER_BIN_DIR
+
+CADDY__CMD="$(orex canon_exe "${BASH_SOURCE:-"${0:?}"}")" || exit
+orex [ "${CADDY__CMD##*/}" = "caddy" ]; export CADDY__CMD
+
+CADDY__HOME="${CADDY__CMD%/*}"; export CADDY__HOME
+
+_caddy="${CADDY__HOME:?}/_caddy"
+_config="${CADDY__HOME:?}/Caddyfile"
+_envfile="${CADDY__HOME:?}/.env"
+_envfile_local="${CADDY__HOME:?}/.env.local"
+_pidfile="${CADDY__HOME:?}/.pid"
+
+orex is_binary "${_caddy:?}"
+
+[ -f "${_envfile_local:?}" ] || touch "${_envfile_local:?}"
+
+orex cd "${CADDY__HOME:?}" && set -a && orex . "$_envfile" && orex . "$_envfile_local" && set +a && orex cd "${OLDPWD:?}"
+
+if "$_caddy" list-modules -s | grep -Fq 'dns.providers.cloudflare'; then :; else
+  orex "$_caddy" add-package github.com/caddy-dns/cloudflare
+fi
+
+case "${1:-start}" in
+  (run) {
+    shift; set -- run --config "$_config" --envfile "$_envfile" --pidfile "$_pidfile" "$@"
+    };;
+  (start) {
+    shift; set -- start --config "$_config" --envfile "$_envfile" --pidfile "$_pidfile" "$@"
+    };;
+  (validate) {
+    if [ $# -eq 1 ]; then
+      shift; set -- validate --config "$_config" --envfile "$_envfile" "$@"
+    fi
+    };;
+  (trust) {
+    shift; set -- trust --config "$_config" "$@"
+       };;
+  (untrust) {
+    shift; set -- untrust --config "$_config" "$@"
+       };;
+  (reload) {
+    shift; set -- reload --config "$_config" "$@"
+    };;
+  (stop) {
+    shift; set -- stop --config "$_config" "$@"
+   };;
+esac
+
+exec "$_caddy" "$@"
+
+SH
+
+    orex chmod a+rx "${CADDY__CMD:?}"
+    orex ln -sf "${CADDY__CMD:?}" "${USER_BIN_DIR:?}/caddy"
+  )
+
+  set +a
+
+  orex _caddy_main "$@"
+
+)
+
+set +a
+
+case "$([ -f "$0" ] && readlink -f -- "$0")" in
+  (*/caddy-install) orex caddy_install "$@" ;;
+  ('') { >&2 printf "ERROR[1]: Unable to locate \$0: '%s'\n" "$0"; exit 1; } ;;
+  (*) alias caddy-install="caddy_install" ;;
+esac
+
+
