@@ -30,4 +30,14 @@ export_LOCAL__USER() {
     set +a
   }
 
+  export_USER__BIN() {
+    USER__BIN="${USER__BIN:-"$(
+      set -- 'bin' '.bin' '.local/bin'
+      for d; do d="$HOME/$d"; case ":$PATH:" in (*:"$d":*) { printf %s "$d"; exit; };; esac; done
+    )"}"
+    USER__BIN="${USER__BIN:-"$HOME/bin"}"; export USER__BIN
+    mkdir -p "$USER__BIN" || return "$?$(>&2 printf 'ERROR[%d]: %s\n' "$?" "mkdir -p $USER__BIN")"
+    case ":$PATH:" in *:"${USER__BIN:?}":*);; *) PATH="${USER__BIN:?}${PATH:+:$PATH}";; esac;
+  }
+
   set +a  
