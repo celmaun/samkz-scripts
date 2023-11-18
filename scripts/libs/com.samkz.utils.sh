@@ -20,11 +20,10 @@ is_binary() { [ -f "${1-}" ] || return; case "$(orex file "${1:?}")" in (*execut
 is_shell_script() { [ -f "${1-}" ] || return; case "$(orex file "${1:?}")" in (*shell*script*) return 0;; esac; return 1; }
 is_shell_program() { [ -f "${1-}" ] && [ -x "$1" ] || return; case "$(orex file "${1:?}")" in (*shell*script*) return 0;; esac; return 1; }
 
-file_user() { [ -e "$1" ] && (set -f -- $(command ls -ld "$1"); user="${3-}"; printf '%s\n' "${user:?}"); }
-file_group() { [ -e "$1" ] && (set -f -- $(command ls -ld "$1"); group="${4-}"; printf '%s\n' "${group:?}"); }
-
-user_colon_group() { [ -e "$1" ] && (set -f -- $(command ls -ld "$1"); user="${3-}"; group="${4-}"; printf '%s:%s\n' "${user:?}" "${group:?}"); }
-
+file_user() { [ -e "$1" ] && (x="$(command ls -ld "$1")" || exit; set -f -- ${x:?} || exit; user="${3-}"; id -urn "${user:?}"); }
+file_group() { [ -e "$1" ] && (x="$(command ls -ld "$1")" || exit; set -f -- ${x:?} || exit; group="${4-}"; printf '%s\n' "${group:?}"); }
+file_user_colon_group() { [ -e "$1" ] && (x="$(command ls -ld "$1")" || exit; set -f -- ${x:?} || exit; user="${3-}"; group="${4-}"; printf '%s:%s\n' "$(id -urn "${user:?}")" "${group:?}"); }
+    
 print__LOCAL__USER() {
     set +e -u
 
