@@ -15,14 +15,28 @@ canon_file() { [ -n "$1" ] && [ -f "$1" ] && readlink -f -- "$1"; }
 canon_dir() { [ -n "$1" ] && [ -d "$1" ] && readlink -f -- "$1"; }
 canon_exe() { [ -n "$1" ] && [ -f "$1" ] && [ -x "$1" ] && readlink -f -- "$1"; }
 
+
+is_binary() { [ -f "${1-}" ] || return; case "$(orex file "${1:?}")" in (*executable*) return 0;; esac; return 1; }
+is_shell_script() { [ -f "${1-}" ] || return; case "$(orex file "${1:?}")" in (*shell*script*) return 0;; esac; return 1; }
+is_shell_program() { [ -f "${1-}" ] && [ -x "$1" ] || return; case "$(orex file "${1:?}")" in (*shell*script*) return 0;; esac; return 1; }
+
 print__LOCAL__USER() {
     set +e -u
 
-    file_user() { [ -e "$1" ] && x="$(command ls -ld "$1")" && x="${x#* * }" && x="${x%% *}" && [ -n "$x" ] && id -urn "$x"; }
+    u=
+    while :; do
+      u="$(id -urn)"; [ -z "${u##root}" ] || break
+      u="$(id -un)"; [ -z "${u##root}" ] || break
+      u="$(logname)"; [ -z "${u##root}" ] || break
+      u="$(who am i)"; u="${u%% *}"; [ -z "${u##root}" ] || break
+      u="${SUDO_USER:-}"; [ -z "${u##root}" ] || break
+    done
 
-    set -- "$(id -urn)" "$(id -un)" "${APPCON__USER__ADMIN-}" "${SUDO_USER-}"
-    for u; do [ -n "${u##root}" ] && id -urn "${u:?}" && exit; done
-    set -- "${BASH_SOURCE-}" "${0-}" "$PWD"
+    [ -n "${u##root}" ] && printf '%s\n' "${u:?}" && exit
+
+    file_user() { [ -e "$1" ] && x="$(command ls -ld "$1")" && x="${x#* ?* }" && x="${x%% *}" && [ -n "$x" ] && id -urn "$x"; }
+
+    set -- "${BASH_SOURCE-}" "${0-}" "${HOME-}" "$PWD"
     for f; do u="$(file_user "$f")" && [ -n "${u##root}" ] && id -urn "${u:?}" && exit; done
 
     exit "1$(>&2 printf '%s\n' "Unable to find non-root user")"
@@ -37,23 +51,43 @@ export__LOCAL__USER() {
     LOCAL__EUID="$(id -u "${LOCAL__USER:?}")"
     LOCAL__GID="$(id -gr "${LOCAL__USER:?}")"
     LOCAL__EGID="$(id -g "${LOCAL__USER:?}")"
-    eval "LOCAL__HOME=~${LOCAL__USER:?}"
+    eval "LOCAL__HOME=~${LOCAL__USER:?}"; export LOCAL__HOME
     set +a
     
-    export__LOCAL__BIN
+    ${LOCAL__BIN:+:} export__LOCAL__BIN
 }
 
 export__LOCAL__BIN() {
-    [ -d "${LOCAL__HOME-}" ] || export__LOCAL__USER
-    LOCAL__BIN="${LOCAL__BIN:-"$(
-        set -- 'bin' '.bin' '.local/bin'
-        for d; do 
-            d="${LOCAL__HOME:?}/$d"
-            case ":$PATH:" in (*:"$d":*) { printf %s "$d"; exit; };; esac; 
+    file_user() { [ -e "$1" ] && x="$(command ls -ld "$1")" && x="${x#* ?* }" && x="${x%% *}" && [ -n "$x" ] && id -urn "$x"; }
+
+    ${LOCAL__USER:+:} export__LOCAL__USER
+
+    LOCAL__BIN="$(
+        set +a -u
+
+        h="${LOCAL__HOME:?}"
+        set -- "$h/bin" "$h/.bin" "$h/.local/bin"
+        for d; do
+            case ":$PATH:" in (*:"$d":*) { printf '%s\n' "$d" && exit; };; esac;
         done
-    )"}"
+
+        d="/usr/local/bin"
+        [ "$(file_user "$d" ||:)" = "${LOCAL__USER:?}" ] && printf '%s\n' "$d" && exit
+
+        d="/opt/homebrew/bin"
+        [ "$(file_user "$d" ||:)" = "${LOCAL__USER:?}" ] && printf '%s\n' "$d" && exit
+    )"
+
     LOCAL__BIN="${LOCAL__BIN:-"${LOCAL__HOME:?}/bin"}"; export LOCAL__BIN
-    orex mkdir -p "$LOCAL__BIN"
+
+    if [ -d "${LOCAL__BIN}" ]; then :; else
+      orex mkdir -p "$LOCAL__BIN"
+    fi
+
+    if [ "$(file_user "${LOCAL__BIN:?}")" = "$LOCAL__USER" ]; then :; else
+      orex chown "${LOCAL__USER:?}:" "${LOCAL__BIN:?}"
+    fi
+
     case ":$PATH:" in (*:"${LOCAL__BIN:?}":*);; (*) PATH="${LOCAL__BIN:?}${PATH:+:$PATH}";; esac
 }
 
