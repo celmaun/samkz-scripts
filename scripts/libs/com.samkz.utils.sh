@@ -23,6 +23,8 @@ is_shell_program() { [ -f "${1-}" ] && [ -x "$1" ] || return; case "$(orex file 
 file_user() { [ -e "$1" ] && (set -f -- $(command ls -ld "$1"); user="${3-}"; printf '%s\n' "${user:?}"); }
 file_group() { [ -e "$1" ] && (set -f -- $(command ls -ld "$1"); group="${4-}"; printf '%s\n' "${group:?}"); }
 
+user_colon_group() { [ -e "$1" ] && (set -f -- $(command ls -ld "$1"); user="${3-}"; group="${4-}"; printf '%s:%s\n' "${user:?}" "${group:?}"); }
+
 print__LOCAL__USER() {
     set +e -u
 
