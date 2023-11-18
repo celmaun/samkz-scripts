@@ -20,6 +20,10 @@ is_binary() { [ -f "${1-}" ] || return; case "$(orex file "${1:?}")" in (*execut
 is_shell_script() { [ -f "${1-}" ] || return; case "$(orex file "${1:?}")" in (*shell*script*) return 0;; esac; return 1; }
 is_shell_program() { [ -f "${1-}" ] && [ -x "$1" ] || return; case "$(orex file "${1:?}")" in (*shell*script*) return 0;; esac; return 1; }
 
+file_user() { [ -e "$1" ] && x="$(command ls -ld "$1")" && x="${x#* ?* }" && x="${x%% *}" && [ -n "$x" ] && printf '%s\n' "$x"; }
+file_group() { [ -e "$1" ] && x="$(command ls -ld "$1")" && x="${x#* * *  }" && x="${x%% *}" && printf '%s\n' "$x"; }
+
+
 print__LOCAL__USER() {
     set +e -u
 
@@ -33,8 +37,6 @@ print__LOCAL__USER() {
     done
 
     [ -n "${u##root}" ] && printf '%s\n' "${u:?}" && exit
-
-    file_user() { [ -e "$1" ] && x="$(command ls -ld "$1")" && x="${x#* ?* }" && x="${x%% *}" && [ -n "$x" ] && id -urn "$x"; }
 
     set -- "${BASH_SOURCE-}" "${0-}" "${HOME-}" "$PWD"
     for f; do u="$(file_user "$f")" && [ -n "${u##root}" ] && id -urn "${u:?}" && exit; done
@@ -58,8 +60,6 @@ export__LOCAL__USER() {
 }
 
 export__LOCAL__BIN() {
-    file_user() { [ -e "$1" ] && x="$(command ls -ld "$1")" && x="${x#* ?* }" && x="${x%% *}" && [ -n "$x" ] && id -urn "$x"; }
-
     ${LOCAL__USER:+:} export__LOCAL__USER
 
     LOCAL__BIN="$(
