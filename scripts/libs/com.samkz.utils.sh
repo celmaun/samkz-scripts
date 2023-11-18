@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # vim:set ft=bash ts=4 sw=4 et :
 # shellcheck shell=bash
-# shellcheck disable=SC2317
+# shellcheck disable=SC2317,SC2046
 
 
 set -a
@@ -20,9 +20,8 @@ is_binary() { [ -f "${1-}" ] || return; case "$(orex file "${1:?}")" in (*execut
 is_shell_script() { [ -f "${1-}" ] || return; case "$(orex file "${1:?}")" in (*shell*script*) return 0;; esac; return 1; }
 is_shell_program() { [ -f "${1-}" ] && [ -x "$1" ] || return; case "$(orex file "${1:?}")" in (*shell*script*) return 0;; esac; return 1; }
 
-file_user() { [ -e "$1" ] && x="$(command ls -ld "$1")" && x="${x#* ?* }" && x="${x%% *}" && [ -n "$x" ] && printf '%s\n' "$x"; }
-file_group() { [ -e "$1" ] && x="$(command ls -ld "$1")" && x="${x#* * *  }" && x="${x%% *}" && printf '%s\n' "$x"; }
-
+file_user() { [ -e "$1" ] && (set -f -- $(command ls -ld "$1"); user="${3-}"; printf '%s\n' "${user:?}"); }
+file_group() { [ -e "$1" ] && (set -f -- $(command ls -ld "$1"); group="${4-}"; printf '%s\n' "${group:?}"); }
 
 print__LOCAL__USER() {
     set +e -u
