@@ -3,6 +3,7 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2317,SC2046
 
+{ type com_samkz_utils_sh && return; } >/dev/null 2>&1
 
 set -a
 
