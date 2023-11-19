@@ -17,7 +17,7 @@ is_binary() { [ -f "${1-}" ] || return; case "$(orex file "${1:?}")" in (*execut
 is_shell_script() { [ -f "${1-}" ] || return; case "$(orex file "${1:?}")" in (*shell*script*) return 0;; esac; return 1; }
 is_shell_program() { [ -f "${1-}" ] && [ -x "$1" ] || return; case "$(orex file "${1:?}")" in (*shell*script*) return 0;; esac; return 1; }
 
-get_super_group() { printf '%s\n' 'sudo'; }
+get_super_group() { if [ "$(uname -s)" = Darwin ]; then printf '%s\n' 'staff'; else printf '%s\n' 'sudo'; fi; }
 
 install__MAIN__NGINX() {
     orex [ "$(id -urn)" = "root" ]
@@ -78,9 +78,7 @@ export__MAIN__NGINX() {
         MAIN__NGINX__ETC_CONFIG="$(canon_file "$("${MAIN__NGINX__PRG:?}" -t 2>&1 | sed -n 's@^.* configuration *file *\(/.*\.conf\) test .*$@\1@p')")" || break
         MAIN__NGINX__ETC="${MAIN__NGINX__ETC_CONFIG%/*}"; [ -d "$MAIN__NGINX__ETC" ] || break
         MAIN__NGINX__SITES="$(sed -n 's@^[\t ]*include *\(.*\)/\*\;.*$@\1@p' < "${MAIN__NGINX__ETC_CONFIG:?}")"
-        if [ -n "${MAIN__NGINX__SITES##/*}" ]; then
-            MAIN__NGINX__SITES="${MAIN__NGINX__ETC:?}/${MAIN__NGINX__SITES:?}"
-        fi
+        [ -n "${MAIN__NGINX__SITES##/*}" ] && MAIN__NGINX__SITES="${MAIN__NGINX__ETC:?}/${MAIN__NGINX__SITES:?}"
         MAIN__NGINX__SITES="$(canon_dir "${MAIN__NGINX__SITES:?}")" || break
         set +a
         return 0
@@ -144,19 +142,19 @@ setup__MAIN__LETSENCRYPT() {
     orex export__MAIN__LETSENCRYPT
 
     orex [ -d "${MAIN__LETSENCRYPT__CONFIG_DIR:?}" ]
-    orex [ -d "${MAIN__LETSENCRYPT__CONFIG_LIVE_DIR:?}" ]
+    orex [ -d "${MAIN__LETSENCRYPT__LIVE_DIR:?}" ]
     orex [ -d "${MAIN__LETSENCRYPT__WORK_DIR:?}" ]
     orex [ -d "${MAIN__LETSENCRYPT__LOGS_DIR:?}" ]
 
     orex chgrp -R "$(get_super_group)" \
         "${MAIN__LETSENCRYPT__CONFIG_DIR:?}" \
-        "${MAIN__LETSENCRYPT__CONFIG_LIVE_DIR:?}" \
+        "${MAIN__LETSENCRYPT__LIVE_DIR:?}" \
         "${MAIN__LETSENCRYPT__WORK_DIR:?}" \
         "${MAIN__LETSENCRYPT__LOGS_DIR:?}"
     
     orex chmod -R g+rwX \
         "${MAIN__LETSENCRYPT__CONFIG_DIR:?}" \
-        "${MAIN__LETSENCRYPT__CONFIG_LIVE_DIR:?}" \
+        "${MAIN__LETSENCRYPT__LIVE_DIR:?}" \
         "${MAIN__LETSENCRYPT__WORK_DIR:?}" \
         "${MAIN__LETSENCRYPT__LOGS_DIR:?}"
 
@@ -180,12 +178,17 @@ setup__MAIN__LETSENCRYPT() {
 }
 
 export__MAIN__LETSENCRYPT() {
-    # --config-dir CONFIG_DIR Configuration directory. (default: /etc/letsencrypt)
+  #   -c CONFIG_FILE, --config CONFIG_FILE
+  #                     path to config file (default: /etc/letsencrypt/cli.ini
+  #                     and ~/.config/letsencrypt/cli.ini)
+  # # --config-dir CONFIG_DIR Configuration directory. (default: /etc/letsencrypt)
     # --work-dir WORK_DIR   Working directory. (default: /var/lib/letsencrypt)
     # --logs-dir LOGS_DIR   Logs directory. (default: /var/log/letsencrypt)
     set -a
     MAIN__LETSENCRYPT__CONFIG_DIR="/etc/letsencrypt"
-    MAIN__LETSENCRYPT__CONFIG_LIVE_DIR="/etc/letsencrypt/live"
+    MAIN__LETSENCRYPT__CONFIG_CLI="${MAIN__LETSENCRYPT__CONFIG_DIR:?}/cli.ini"
+    ${LOCAL__ETC:+ MAIN__LETSENCRYPT__USER_CONFIG_CLI="${LOCAL__ETC:?}/letsencrypt/cli.ini" }
+    MAIN__LETSENCRYPT__LIVE_DIR="/etc/letsencrypt/live"
     MAIN__LETSENCRYPT__WORK_DIR="/var/lib/letsencrypt"
     MAIN__LETSENCRYPT__LOGS_DIR="/var/log/letsencrypt"
     set +a
