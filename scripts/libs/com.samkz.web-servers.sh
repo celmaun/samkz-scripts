@@ -19,14 +19,13 @@ canon_dir() { [ -n "$1" ] && [ -d "$1" ] && readlink -f -- "$1"; }
 canon_exe() { [ -n "$1" ] && [ -f "$1" ] && [ -x "$1" ] && readlink -f -- "$1"; }
 
 
-if ( 2>/dev/null type com_samkz_utils_sh ); then :; else
-  SAMKZ__UTILS_LIB_SH="${SAMKZ__UTILS_LIB_SH:-"$(
-    f="${BASH_SOURCE:?}" && [ -f "$f" ] && f="$(readlink -f -- "$f")" && d="${f%/*}";
-    for f in "$d"/com.samkz.utils*.sh; do canon_file "$f" && exit; done
-  )"}"
+SAMKZ__UTILS_LIB_SH="${SAMKZ__UTILS_LIB_SH:-"$(
+  f="${BASH_SOURCE:?}" && [ -f "$f" ] && f="$(readlink -f -- "$f")" && d="${f%/*}";
+  for f in "$d"/com.samkz.utils*.sh; do :; done
+  canon_file "$f"
+)"}"
 
-  orex . "${SAMKZ__UTILS_LIB_SH:?}"
-fi
+orex . "${SAMKZ__UTILS_LIB_SH:?}"
 
 
 is_binary() { [ -f "${1-}" ] || return; case "$(orex file "${1:?}")" in (*executable*) return 0;; esac; return 1; }
@@ -98,22 +97,23 @@ samkz__nginx__install() {
 }
 
 samkz__nginx__setup() {
-   orex [ "$(id -urn)" = "root" ]
-
    >&2 printf '%s\n' 'Setting up Nginx...'
 
-    samkz__nginx__export
+    orex samkz__nginx__export
 
     orex [ -d "${MAIN__NGINX__ETC:?}" ]
     orex [ -d "${MAIN__NGINX__SITES:?}" ]
 
-    orex chgrp -R "$(get_super_group)" \
-        "${MAIN__NGINX__ETC:?}" \
-        "${MAIN__NGINX__SITES:?}"
-    
-    orex chmod -R g+rwX \
-        "${MAIN__NGINX__ETC:?}" \
-        "${MAIN__NGINX__SITES:?}"
+    if [ "$(id -urn)" = "root" ]; then
+      orex chgrp -R "$(get_super_group)" \
+      "${MAIN__NGINX__ETC:?}" \
+      "${MAIN__NGINX__SITES:?}"
+
+      orex chmod -R g+rwX \
+      "${MAIN__NGINX__ETC:?}" \
+      "${MAIN__NGINX__SITES:?}"
+    fi
+
 }
 
 
@@ -291,7 +291,6 @@ samkz__letsencrypt__install() {
 }
 
 samkz__letsencrypt__setup() {
-    orex [ "$(id -urn)" = "root" ]
 
     orex samkz__letsencrypt__export
 
@@ -300,17 +299,20 @@ samkz__letsencrypt__setup() {
     orex [ -d "${MAIN__LETSENCRYPT__WORK_DIR:?}" ]
     orex [ -d "${MAIN__LETSENCRYPT__LOGS_DIR:?}" ]
 
-    orex chgrp -R "$(get_super_group)" \
-        "${MAIN__LETSENCRYPT__CONFIG_DIR:?}" \
-        "${MAIN__LETSENCRYPT__LIVE_DIR:?}" \
-        "${MAIN__LETSENCRYPT__WORK_DIR:?}" \
-        "${MAIN__LETSENCRYPT__LOGS_DIR:?}"
-    
-    orex chmod -R g+rwX \
-        "${MAIN__LETSENCRYPT__CONFIG_DIR:?}" \
-        "${MAIN__LETSENCRYPT__LIVE_DIR:?}" \
-        "${MAIN__LETSENCRYPT__WORK_DIR:?}" \
-        "${MAIN__LETSENCRYPT__LOGS_DIR:?}"
+    if [ "$(id -urn)" = "root" ]; then
+        orex chgrp -R "$(get_super_group)" \
+            "${MAIN__LETSENCRYPT__CONFIG_DIR:?}" \
+            "${MAIN__LETSENCRYPT__LIVE_DIR:?}" \
+            "${MAIN__LETSENCRYPT__WORK_DIR:?}" \
+            "${MAIN__LETSENCRYPT__LOGS_DIR:?}"
+
+        orex chmod -R g+rwX \
+            "${MAIN__LETSENCRYPT__CONFIG_DIR:?}" \
+            "${MAIN__LETSENCRYPT__LIVE_DIR:?}" \
+            "${MAIN__LETSENCRYPT__WORK_DIR:?}" \
+            "${MAIN__LETSENCRYPT__LOGS_DIR:?}"
+    fi
+
 
     #   orex [ -n "${LEWP__CLOUDFLARE_DNS_API_KEY-}" ]
     #   cf_dns_creds_lensify_ai="${LOCAL__HOME:?}/.cf-dns-creds/lensify.ai.ini"

@@ -26,18 +26,18 @@ file_user() { [ -e "$1" ] && (x="$(command ls -ld "$1")" || exit; set -f -- ${x:
 file_group() { [ -e "$1" ] && (x="$(command ls -ld "$1")" || exit; set -f -- ${x:?} || exit; group="${4-}"; printf '%s\n' "${group:?}"); }
 file_user_colon_group() { [ -e "$1" ] && (x="$(command ls -ld "$1")" || exit; set -f -- ${x:?} || exit; user="${3-}"; group="${4-}"; printf '%s:%s\n' "$(id -urn "${user:?}")" "${group:?}"); }
 
-local_user_owner() {  
+local_user_owner() {
   [ "$(id -ur)" -eq 0 ] || return 0
-  
+
   [ -e "$1" ] || return
-  
+
   x="$(orex readlink -f -- "$1")" || return
-  
+
   if [ -d "$x" ]; then
       oret chown -R "${LOCAL__USER:?}:" "$x" || return
       return
   fi
-  
+
   oret chown "${LOCAL__USER:?}:" "$x" || return
 }
 
@@ -65,10 +65,10 @@ samkz__create_env_file() (
 
   prefix=
   case "$program" in
-    (user) prefix=LOCAL__;;
-    (nginx) prefix=MAIN__NGINX__;;
-    (letsencrypt) prefix=MAIN__LETSENCRYPT__;;
-    (caddy) prefix=MAIN__CADDY__;;
+    (user) {  samkz__local_user_export;  prefix=LOCAL__; };;
+    (nginx) {   samkz__nginx__setup; prefix=MAIN__NGINX__; };;
+    (letsencrypt) { samkz__letsencrypt__export;  prefix=MAIN__LETSENCRYPT__; };;
+    (caddy) { samkz__caddy__setup; prefix=MAIN__CADDY__;  };;
   esac
 
   : "${prefix:?"Invalid program '$program'. Valid values: user, nginx, letsencrypt, caddy"}"
@@ -108,7 +108,7 @@ samkz__local_user() {
 
     # set -- "${BASH_SOURCE-}" "${0-}" "${HOME-}" "$PWD"
 
-    for f in "${BASH_SOURCE-}" "${0-}" "${HOME-}" "$PWD"; do 
+    for f in "${BASH_SOURCE-}" "${0-}" "${HOME-}" "$PWD"; do
       u="$(file_user "$f")" && [ -n "${u##root}" ] && id -urn "${u:?}" && exit
     done
 
@@ -128,7 +128,7 @@ samkz__local_user_export() {
     LOCAL__ETC="${LOCAL__HOME:?}/.config"
     set +a
     [ -d "$LOCAL__ETC" ] || { mkdir "$LOCAL__ETC"; [ "$(id -ur)" -gt 0 ] || chown "$LOCAL__USER:" "$LOCAL__ETC"; }
-    
+
     ${LOCAL__BIN:+:} samkz__local_user_bin_export
 }
 
@@ -165,4 +165,4 @@ samkz__local_user_bin_export() {
 }
 
 
- set +a  
+ set +a
