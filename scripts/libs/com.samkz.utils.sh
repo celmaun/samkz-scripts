@@ -25,7 +25,7 @@ file_user() { [ -e "$1" ] && (x="$(command ls -ld "$1")" || exit; set -f -- ${x:
 file_group() { [ -e "$1" ] && (x="$(command ls -ld "$1")" || exit; set -f -- ${x:?} || exit; group="${4-}"; printf '%s\n' "${group:?}"); }
 file_user_colon_group() { [ -e "$1" ] && (x="$(command ls -ld "$1")" || exit; set -f -- ${x:?} || exit; user="${3-}"; group="${4-}"; printf '%s:%s\n' "$(id -urn "${user:?}")" "${group:?}"); }
 
-local_user_owner() {
+local_user_owner() {  
   [ "$(id -ur)" -eq 0 ] || return 0
   
   [ -e "$1" ] || return
@@ -40,7 +40,43 @@ local_user_owner() {
   oret chown "${LOCAL__USER:?}:" "$x" || return
 }
 
-print__LOCAL__USER() {
+samkz__chown() (
+  file="$1"; : "${file:?}"
+
+  [ "$(id -ur)" -eq 0 ] || return 0
+
+  ${LOCAL__USER:+:} samkz__local_user_export
+
+  orex chown "${LOCAL__USER:?}:" "${file:?}"
+)
+
+samkz__print_env_prefixed() (
+  { builtin shopt -so posix ||:; }>/dev/null 2>&1
+  export -p | sed -E -n "s/^export ($(IFS='|'; printf %s "$*"))/\1/p"
+)
+
+samkz__create_env_file() (
+  ${LOCAL__ETC:+:} samkz__local_user_export
+  orex [ -d "${LOCAL__ETC:?}" ]
+
+  program="$1"; : "${program:?}"
+  env_file="${2:-"${LOCAL__ETC:?}/${program:?}.env"}"
+
+  prefix=
+  case "$program" in
+    (user) prefix=LOCAL__;;
+    (nginx) prefix=MAIN__NGINX__;;
+    (letsencrypt) prefix=MAIN__LETSENCRYPT__;;
+    (caddy) prefix=MAIN__CADDY__;;
+  esac
+
+  : "${prefix:?"Invalid program '$program'. Valid values: user, nginx, letsencrypt, caddy"}"
+
+  samkz__print_env_prefixed "${prefix:?}" | sort -uo "${env_file:?}"
+  samkz__chown "${env_file:?}"
+)
+
+samkz__local_user() {
     set +e -u
 
     u=
@@ -63,10 +99,10 @@ print__LOCAL__USER() {
     exit "1$(>&2 printf '%s\n' "Unable to find non-root user")"
 }
 
-export__LOCAL__USER() {
+samkz__local_user_export() {
     set -a
     LOCAL__USER="$(id -urn)"
-    [ -n "${LOCAL__USER##root}" ] || LOCAL__USER="$(print__LOCAL__USER)"
+    [ -n "${LOCAL__USER##root}" ] || LOCAL__USER="$(samkz__local_user)"
     LOCAL__GROUP="$(id -grn "${LOCAL__USER:?}")"
     LOCAL__UID="$(id -ur "${LOCAL__USER:?}")"
     LOCAL__EUID="$(id -u "${LOCAL__USER:?}")"
@@ -77,11 +113,11 @@ export__LOCAL__USER() {
     set +a
     [ -d "$LOCAL__ETC" ] || { mkdir "$LOCAL__ETC"; [ "$(id -ur)" -gt 0 ] || chown "$LOCAL__USER:" "$LOCAL__ETC"; }
     
-    ${LOCAL__BIN:+:} export__LOCAL__BIN
+    ${LOCAL__BIN:+:} samkz__local_user_bin_export
 }
 
-export__LOCAL__BIN() {
-    ${LOCAL__USER:+:} export__LOCAL__USER
+samkz__local_user_bin_export() {
+    ${LOCAL__USER:+:} samkz__local_user_export
 
     LOCAL__BIN="$(
         set +a -u

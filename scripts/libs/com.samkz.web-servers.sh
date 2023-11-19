@@ -5,7 +5,7 @@
 
 set -a
 
-com_samkz_http_sh() { :; }
+com_samkz_web_servers_sh() { :; }
 
 orex() { "$@" || exit "$?$(>&2 printf   'ERROR[%d]: %s\n' "$?" "$*")"; }
 oret() { "$@" || return "$?$(>&2 printf 'ERROR[%d]: %s\n' "$?" "$*")"; }
@@ -29,40 +29,33 @@ is_shell_program() { [ -f "${1-}" ] && [ -x "$1" ] || return; case "$(orex file 
 
 get_super_group() { if [ "$(uname -s)" = Darwin ]; then printf '%s\n' 'staff'; else printf '%s\n' 'sudo'; fi; }
 
-${LOCAL__USER:+:} orex export__LOCAL__USER
+${LOCAL__USER:+:} orex samkz__local_user_export
 
-install__HOMEBREW() {
+samkz__homebrew__install() {
   [ "$(uname -s)" = "Darwin" ] || return 0
 
-  BREW="$(2>/dev/null command -v brew ||:)"
-  BREW="${BREW:-"/opt/homebrew/bin/brew"}"
-  export BREW
-
-  if [ -f "$BREW"  ] && [ -x "$BREW" ]; then :; else
+  if [ -x "$(2>/dev/null command -v brew || printf '%s\n' '/opt/homebrew/bin/brew')" ]; then :; else
     >&2 printf '%s\n' 'Installing Homebrew...'
     >&2 printf '%s\n' '... The Missing Package Manager for macOS!'
-    /bin/bash -xc "$(curl -fsSL "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh")"
+    orex /bin/bash -xc "$(curl -fsSL "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh")"
   fi
 
-  export__HOMEBREW
+  orex samkz__homebrew__export
 }
 
-export__HOMEBREW() {
-  BREW="$(2>/dev/null command -v brew ||:)"
-  BREW="${BREW:-"/opt/homebrew/bin/brew"}"
-  export BREW
+samkz__homebrew__export() {
+  set -- "$(2>/dev/null command -v brew || printf '%s\n' '/opt/homebrew/bin/brew')"
+  orex [ -x "$1" ]
 
   >&2 printf '%s\n' 'Loading  Homebrew shell environment...'
-  eval "$("${BREW:?}" shellenv sh)"
+  eval "$("$1" shellenv sh)"
 }
 
-install__MAIN__NGINX() {
+samkz__nginx__install() {
     orex [ "$(id -urn)" = "root" ]
 
     if [ "$(uname -s)" = "Linux" ]; then
-      case "$(uname -a)" in (*Ubuntu*);;
-         (*) exit "1$(>&2 printf '%s\n' "Please install Ubuntu, it's pretty nice.")";;
-      esac
+       orex samkz__require_ubuntu
 
        >&2 printf '%s\n' 'Updating package manager caches...'
 
@@ -86,22 +79,24 @@ install__MAIN__NGINX() {
        orex apt-get -y install nginx
 
     elif [ "$(uname -s)" = "Darwin" ];
-      orex install__HOMEBREW
+      orex samkz__homebrew__install
 
       >&2 printf '%s\n' 'Installing Nginx...'
       orex brew install nginx
     else
-      exit "1$(>&2 printf '%s\n' "Windows is not supported. Please try macOS or  Ubuntu Linux.")"
+      exit "1$(>&2 printf '%s\n' "Windows is not supported. Please try macOS or Ubuntu Linux.")"
     fi
 
-    orex setup__MAIN__NGINX
+    orex samkz__nginx__setup
 
 }
 
-setup__MAIN__NGINX() {
+samkz__nginx__setup() {
+   orex [ "$(id -urn)" = "root" ]
+
    >&2 printf '%s\n' 'Setting up Nginx...'
 
-    export__MAIN__NGINX
+    samkz__nginx__export
 
     orex [ -d "${MAIN__NGINX__ETC:?}" ]
     orex [ -d "${MAIN__NGINX__SITES:?}" ]
@@ -116,7 +111,7 @@ setup__MAIN__NGINX() {
 }
 
 
-export__MAIN__NGINX() {
+samkz__nginx__export() {
     set +e -u
 
     for _ in _; do
@@ -140,21 +135,19 @@ export__MAIN__NGINX() {
 samkz__require_ubuntu() {
   for _ in _; do
     [ "$(uname -s)" = "Linux" ] || break
-     case "$(uname -a)" in
-        (*Ubuntu*) return 0;;
-     esac
+     case "$(uname -a)" in (*Ubuntu*) return 0;; esac
   done
 
   exit "1$(>&2 printf '%s\n' "Please install Ubuntu, it's pretty nice.")"
 }
 
-samkz__service__nginx() {
+samkz__nginx__service() {
   orex [ "$(id -urn)" = "root" ]
 
   subcommand="$1"; : "${subcommand:?}"
 
   case "$subcommand" in (stop|start|restart);;
-    (*) exit "1$(>&2 printf '%s\n' "samkz__service__nginx: Invalid subcommand '$subcommand'. Accepted: stop, start, restart")"
+    (*) exit "1$(>&2 printf '%s\n' "samkz__nginx__service: Invalid subcommand '$subcommand'. Accepted: stop, start, restart")"
   esac
 
   if [ "$(uname -s)" = "Linux" ]; then
@@ -162,7 +155,7 @@ samkz__service__nginx() {
     >&2 printf '%s\n' "Nginx service to $subcommand..."
     orex systemctl "$subcommand" nginx
   elif [ "$(uname -s)" = "Darwin" ];
-    orex export__HOMEBREW
+    orex samkz__homebrew__export
     >&2 printf '%s\n' "Nginx service to $subcommand..."
     orex brew services "$subcommand" nginx
   else
@@ -171,50 +164,54 @@ samkz__service__nginx() {
 }
 
 
-install__MAIN__CADDY() {
+samkz__caddy__install() {
     orex [ "$(id -urn)" = "root" ]
 
     if [ "$(uname -s)" = "Linux" ]; then
-      case "$(uname -a)" in (*Ubuntu*);;
-         (*) exit "1$(>&2 printf '%s\n' "Please install Ubuntu, it's pretty nice.")";;
-       esac
+      orex samkz__require_ubuntu
 
        >&2 printf '%s\n' 'Updating package manager caches...'
 
        orex apt-get update
 
-       >&2 printf '%s\n' 'Installing common dependencies...'
+        # https://caddyserver.com/docs/install#debian-ubuntu-raspbian
+        # Debian, Ubuntu, Raspbian
+        # Installing this package automatically starts and runs Caddy as a systemd service named caddy. It also comes with an optional caddy-api service which is not enabled by default, but should be used if you primarily configure Caddy via its API instead of config files.
+        #
+        # After installing, please read the service usage instructions.
+        #
+        # Stable releases:
+        >&2 printf '%s\n' 'Installing common dependencies...'
        # Common dependencies for various packages
-       orex apt-get -y install \
-           apt-transport-https \
-           ca-certificates \
-           curl \
-           gnupg \
-           lsb-release
+        apt install -y debian-keyring debian-archive-keyring apt-transport-https \
+            ca-certificates curl gnupg lsb-release
 
-       >&2 printf '%s\n' 'Updating package manager caches...'
+        >&2 printf '%s\n' 'Adding APT GPG key for Caddy...'
+        orex curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
 
-       orex apt-get update
+        >&2 printf '%s\n' 'Adding APT repo for Caddy...'
+        orex curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
 
-       >&2 printf '%s\n' 'Installing Caddy...'
+        orex apt update
 
-       exit "1$(>&2 printf '%s\n' "Sorry installing Caddy on Linux isn't implemented yet.")"
+        >&2 printf '%s\n' 'Installing Caddy...'
+        orex apt install caddy
 
     elif [ "$(uname -s)" = "Darwin" ];
-      orex install__HOMEBREW
+      orex samkz__homebrew__install
 
       >&2 printf '%s\n' 'Installing Caddy...'
       orex brew install caddy
     else
-      exit "1$(>&2 printf '%s\n' "Windows is not supported. Please try macOS or  Ubuntu Linux.")"
+        exit "1$(>&2 printf '%s\n' "Windows is not supported. Please try macOS or  Ubuntu Linux.")"
     fi
 
-    orex setup__MAIN__CADDY
+    orex samkz__caddy__setup
 
 }
 
 
-setup__MAIN__CADDY() {
+samkz__caddy__setup() {
   set -a
   # @TODO
   MAIN__CADDY__HOME="${LOCAL__HOME:?}/caddy"
@@ -226,11 +223,12 @@ setup__MAIN__CADDY() {
   set +a
 }
 
-install__MAIN__LETSENCRYPT() {
+samkz__letsencrypt__install() {
     orex [ "$(id -urn)" = "root" ]
 
     if [ "$(uname -s)" = "Linux" ]; then
-      case "$(uname -a)" in (*Ubuntu*);; (*) exit "1$(>&2 printf '%s\n' "Please install Ubuntu, it's pretty nice.")";; esac
+
+      orex samkz__require_ubuntu
 
       >&2 printf '%s\n' 'Updating package manager caches...'
 
@@ -242,11 +240,18 @@ install__MAIN__LETSENCRYPT() {
 
       >&2 printf '%s\n' 'Installing libsecret-tools...'
       orex apt-get -y install libsecret-tools
-    elif [ "$(uname -s)" = "Darwin" ];
-      orex install__HOMEBREW
+
+    elif [ "$(uname -s)" = "Darwin" ]
+
+      orex samkz__homebrew__install
+
+      >&2 printf '%s\n' 'Installing Python 3...'
       orex brew install python3
+
     else
+
       exit "1$(>&2 printf '%s\n' "Windows is not supported. Please try macOS or  Ubuntu Linux.")"
+
     fi
 
 
@@ -276,13 +281,13 @@ install__MAIN__LETSENCRYPT() {
     >&2 printf '%s\n' 'Installing Python modules, Certbot and Cloudflare...'
     orex pip3 install -U cloudflare certbot-nginx certbot-dns-cloudflare
 
-    orex setup__MAIN__LETSENCRYPT
+    orex samkz__letsencrypt__setup
 }
 
-setup__MAIN__LETSENCRYPT() {
+samkz__letsencrypt__setup() {
     orex [ "$(id -urn)" = "root" ]
 
-    orex export__MAIN__LETSENCRYPT
+    orex samkz__letsencrypt__export
 
     orex [ -d "${MAIN__LETSENCRYPT__CONFIG_DIR:?}" ]
     orex [ -d "${MAIN__LETSENCRYPT__LIVE_DIR:?}" ]
@@ -320,7 +325,7 @@ setup__MAIN__LETSENCRYPT() {
 
 }
 
-export__MAIN__LETSENCRYPT() {
+samkz__letsencrypt__export() {
   #   -c CONFIG_FILE, --config CONFIG_FILE
   #                     path to config file (default: /etc/letsencrypt/cli.ini
   #                     and ~/.config/letsencrypt/cli.ini)
