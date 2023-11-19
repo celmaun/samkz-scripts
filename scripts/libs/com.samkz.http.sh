@@ -187,7 +187,7 @@ export__MAIN__LETSENCRYPT() {
     set -a
     MAIN__LETSENCRYPT__CONFIG_DIR="/etc/letsencrypt"
     MAIN__LETSENCRYPT__CONFIG_CLI="${MAIN__LETSENCRYPT__CONFIG_DIR:?}/cli.ini"
-    ${LOCAL__ETC:+ export MAIN__LETSENCRYPT__USER_CONFIG_CLI="${LOCAL__ETC:?}/letsencrypt/cli.ini" }
+    ${LOCAL__ETC:+false} || MAIN__LETSENCRYPT__USER_CONFIG_CLI="${LOCAL__ETC:?}/letsencrypt/cli.ini"
     MAIN__LETSENCRYPT__LIVE_DIR="/etc/letsencrypt/live"
     MAIN__LETSENCRYPT__WORK_DIR="/var/lib/letsencrypt"
     MAIN__LETSENCRYPT__LOGS_DIR="/var/log/letsencrypt"
