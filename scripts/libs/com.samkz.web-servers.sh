@@ -16,12 +16,16 @@ canon_file() { [ -n "$1" ] && [ -f "$1" ] && readlink -f -- "$1"; }
 canon_dir() { [ -n "$1" ] && [ -d "$1" ] && readlink -f -- "$1"; }
 canon_exe() { [ -n "$1" ] && [ -f "$1" ] && [ -x "$1" ] && readlink -f -- "$1"; }
 
-SAMKZ__UTILS_LIB_SH="${SAMKZ__UTILS_LIB_SH:-"$(
-  f="${BASH_SOURCE:?}" && [ -f "$f" ] && f="$(readlink -f -- "$f")" && d="${f%/*}";
-  for f in "$d"/com.samkz.utils*.sh; do canon_file "$f" && exit; done
-)"}"
 
-orex . "${SAMKZ__UTILS_LIB_SH:?}"
+if ( 2>/dev/null type com_samkz_utils_sh ); then :; else
+  SAMKZ__UTILS_LIB_SH="${SAMKZ__UTILS_LIB_SH:-"$(
+    f="${BASH_SOURCE:?}" && [ -f "$f" ] && f="$(readlink -f -- "$f")" && d="${f%/*}";
+    for f in "$d"/com.samkz.utils*.sh; do canon_file "$f" && exit; done
+  )"}"
+
+  orex . "${SAMKZ__UTILS_LIB_SH:?}"
+fi
+
 
 is_binary() { [ -f "${1-}" ] || return; case "$(orex file "${1:?}")" in (*executable*) return 0;; esac; return 1; }
 is_shell_script() { [ -f "${1-}" ] || return; case "$(orex file "${1:?}")" in (*shell*script*) return 0;; esac; return 1; }
@@ -78,7 +82,7 @@ samkz__nginx__install() {
        # Nginx
        orex apt-get -y install nginx
 
-    elif [ "$(uname -s)" = "Darwin" ];
+    elif [ "$(uname -s)" = "Darwin" ]; then
       orex samkz__homebrew__install
 
       >&2 printf '%s\n' 'Installing Nginx...'
