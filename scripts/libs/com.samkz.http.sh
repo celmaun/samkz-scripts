@@ -34,16 +34,26 @@ ${LOCAL__USER:+:} orex export__LOCAL__USER
 install__HOMEBREW() {
   [ "$(uname -s)" = "Darwin" ] || return 0
 
- if command -V brew; then
-    >&2 printf '%s\n' 'Loading  Homebrew shell environment...'
-    eval "$(brew shellenv sh)"
-  else
+  BREW="$(2>/dev/null command -v brew ||:)"
+  BREW="${BREW:-"/opt/homebrew/bin/brew"}"
+  export BREW
+
+  if [ -f "$BREW"  ] && [ -x "$BREW" ]; then :; else
     >&2 printf '%s\n' 'Installing Homebrew...'
     >&2 printf '%s\n' '... The Missing Package Manager for macOS!'
     /bin/bash -xc "$(curl -fsSL "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh")"
-    >&2 printf '%s\n' 'Loading  Homebrew shell environment...'
-    eval "$(/opt/homebrew/bin/brew shellenv sh)"
   fi
+
+  export__HOMEBREW
+}
+
+export__HOMEBREW() {
+  BREW="$(2>/dev/null command -v brew ||:)"
+  BREW="${BREW:-"/opt/homebrew/bin/brew"}"
+  export BREW
+
+  >&2 printf '%s\n' 'Loading  Homebrew shell environment...'
+  eval "$("${BREW:?}" shellenv sh)"
 }
 
 install__MAIN__NGINX() {
@@ -124,6 +134,40 @@ export__MAIN__NGINX() {
     set +a
     unset MAIN__NGINX__EXE MAIN__NGINX__PRG MAIN__NGINX__ETC_CONFIG MAIN__NGINX__ETC MAIN__NGINX__SITES
     return 1
+}
+
+
+samkz__require_ubuntu() {
+  for _ in _; do
+    [ "$(uname -s)" = "Linux" ] || break
+     case "$(uname -a)" in
+        (*Ubuntu*) return 0;;
+     esac
+  done
+
+  exit "1$(>&2 printf '%s\n' "Please install Ubuntu, it's pretty nice.")"
+}
+
+samkz__service__nginx() {
+  orex [ "$(id -urn)" = "root" ]
+
+  subcommand="$1"; : "${subcommand:?}"
+
+  case "$subcommand" in (stop|start|restart);;
+    (*) exit "1$(>&2 printf '%s\n' "samkz__service__nginx: Invalid subcommand '$subcommand'. Accepted: stop, start, restart")"
+  esac
+
+  if [ "$(uname -s)" = "Linux" ]; then
+    orex samkz__require_ubuntu
+    >&2 printf '%s\n' "Nginx service to $subcommand..."
+    orex systemctl "$subcommand" nginx
+  elif [ "$(uname -s)" = "Darwin" ];
+    orex export__HOMEBREW
+    >&2 printf '%s\n' "Nginx service to $subcommand..."
+    orex brew services "$subcommand" nginx
+  else
+    exit "1$(>&2 printf '%s\n' "Windows is not supported. Please try macOS or  Ubuntu Linux.")"
+  fi
 }
 
 
