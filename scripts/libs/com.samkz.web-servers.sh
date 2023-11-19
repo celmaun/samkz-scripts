@@ -158,7 +158,7 @@ samkz__nginx__service() {
     orex samkz__require_ubuntu
     >&2 printf '%s\n' "Nginx service to $subcommand..."
     orex systemctl "$subcommand" nginx
-  elif [ "$(uname -s)" = "Darwin" ];
+  elif [ "$(uname -s)" = "Darwin" ]; then
     orex samkz__homebrew__export
     >&2 printf '%s\n' "Nginx service to $subcommand..."
     orex brew services "$subcommand" nginx
@@ -201,7 +201,7 @@ samkz__caddy__install() {
         >&2 printf '%s\n' 'Installing Caddy...'
         orex apt install caddy
 
-    elif [ "$(uname -s)" = "Darwin" ];
+    elif [ "$(uname -s)" = "Darwin" ]; then
       orex samkz__homebrew__install
 
       >&2 printf '%s\n' 'Installing Caddy...'
@@ -245,7 +245,7 @@ samkz__letsencrypt__install() {
       >&2 printf '%s\n' 'Installing libsecret-tools...'
       orex apt-get -y install libsecret-tools
 
-    elif [ "$(uname -s)" = "Darwin" ]
+    elif [ "$(uname -s)" = "Darwin" ]; then
 
       orex samkz__homebrew__install
 
