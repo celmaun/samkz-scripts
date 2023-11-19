@@ -78,7 +78,7 @@ samkz__create_env_file() (
 
 samkz__import_env() {
   program="$1"; : "${program:?}"
-  env_file="${LOCAL__ETC:-"$(samkz__local_user_export && printf '%s\n' "${LOCAL__ETC:?}")"}/${program:?}.env}"
+  env_file="${LOCAL__ETC:-"$(samkz__local_user_export && printf '%s\n' "${LOCAL__ETC:?}")"}/${program:?}.env"
 
   if [ -f "$env_file" ]; then :; else
     samkz__create_env_file "$program"
