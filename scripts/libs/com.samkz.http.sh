@@ -92,20 +92,28 @@ export__MAIN__NGINX() {
 
 install__MAIN__LETSENCRYPT() {
     orex [ "$(id -urn)" = "root" ]
-    orex [ "$(uname -s)" = "Linux" ]
-    case "$(uname -a)" in (*Ubuntu*);; (*) exit "1$(>&2 printf '%s\n' "Please install Ubuntu, it's pretty nice.")";; esac
-   
-    >&2 printf '%s\n' 'Updating package manager caches...'
-
-    orex apt-get update
 
 
-    >&2 printf '%s\n' 'Installing Python 3...'
-    # Python3 (used by e.g., certbot)
-    orex apt-get -y install python3 python3-pip
 
-    >&2 printf '%s\n' 'Installing libsecret-tools...'
-    orex apt-get -y install libsecret-tools
+    if [ "$(uname -s)" = "Linux" ]; then
+      case "$(uname -a)" in (*Ubuntu*);; (*) exit "1$(>&2 printf '%s\n' "Please install Ubuntu, it's pretty nice.")";; esac
+
+      >&2 printf '%s\n' 'Updating package manager caches...'
+
+      orex apt-get update
+
+      >&2 printf '%s\n' 'Installing Python 3...'
+      # Python3 (used by e.g., certbot)
+      orex apt-get -y install python3 python3-pip
+
+      >&2 printf '%s\n' 'Installing libsecret-tools...'
+      orex apt-get -y install libsecret-tools
+    elif [ "$(uname -s)" = "Darwin" ];
+      orex brew install python3
+    else
+      exit "1$(>&2 printf '%s\n' "Windows is not supported. Please try macOS or  Ubuntu Linux.")"
+    fi
+
 
     # https://pip.pypa.io/en/stable/installation/
     # ensurepip
@@ -118,8 +126,8 @@ install__MAIN__LETSENCRYPT() {
     # useful to ensure you can also install from source archives:
     >&2 printf '%s\n' 'Installing pip package management stuff...'
     oret python3 -m pip install -U pip setuptools wheel ||:
-    orex pip3 -U install pip
-    orex pip3 -U install pyopenssl
+    orex pip3 install -U pip
+    orex pip3 install -U pyopenssl
 
     ## SSL
     # https://certbot-dns-cloudflare.readthedocs.io/en/stable/
