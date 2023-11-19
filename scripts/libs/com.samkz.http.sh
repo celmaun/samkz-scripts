@@ -5,13 +5,23 @@
 
 set -a
 
+com_samkz_http_sh() { :; }
+
 orex() { "$@" || exit "$?$(>&2 printf   'ERROR[%d]: %s\n' "$?" "$*")"; }
 oret() { "$@" || return "$?$(>&2 printf 'ERROR[%d]: %s\n' "$?" "$*")"; }
+
 quote() { printf '%s\n' "$1" | sed "s/'/'\\\\''/g;1s/^/'/;\$s/\$/'/" ; }
 
 canon_file() { [ -n "$1" ] && [ -f "$1" ] && readlink -f -- "$1"; }
 canon_dir() { [ -n "$1" ] && [ -d "$1" ] && readlink -f -- "$1"; }
 canon_exe() { [ -n "$1" ] && [ -f "$1" ] && [ -x "$1" ] && readlink -f -- "$1"; }
+
+SAMKZ__UTILS_LIB_SH="${SAMKZ__UTILS_LIB_SH:-"$(
+  f="${BASH_SOURCE:?}" && [ -f "$f" ] && f="$(readlink -f -- "$f")" && d="${f%/*}";
+  for f in "$d"/com.samkz.utils*.sh; do canon_file "$f" && exit; done
+)"}"
+
+orex . "${SAMKZ__UTILS_LIB_SH:?}"
 
 is_binary() { [ -f "${1-}" ] || return; case "$(orex file "${1:?}")" in (*executable*) return 0;; esac; return 1; }
 is_shell_script() { [ -f "${1-}" ] || return; case "$(orex file "${1:?}")" in (*shell*script*) return 0;; esac; return 1; }
@@ -19,32 +29,60 @@ is_shell_program() { [ -f "${1-}" ] && [ -x "$1" ] || return; case "$(orex file 
 
 get_super_group() { if [ "$(uname -s)" = Darwin ]; then printf '%s\n' 'staff'; else printf '%s\n' 'sudo'; fi; }
 
+${LOCAL__USER:+:} orex export__LOCAL__USER
+
+install__HOMEBREW() {
+  [ "$(uname -s)" = "Darwin" ] || return 0
+
+ if command -V brew; then
+    >&2 printf '%s\n' 'Loading  Homebrew shell environment...'
+    eval "$(brew shellenv sh)"
+  else
+    >&2 printf '%s\n' 'Installing Homebrew...'
+    >&2 printf '%s\n' '... The Missing Package Manager for macOS!'
+    /bin/bash -xc "$(curl -fsSL "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh")"
+    >&2 printf '%s\n' 'Loading  Homebrew shell environment...'
+    eval "$(/opt/homebrew/bin/brew shellenv sh)"
+  fi
+}
+
 install__MAIN__NGINX() {
     orex [ "$(id -urn)" = "root" ]
-    orex [ "$(uname -s)" = "Linux" ]
-    case "$(uname -a)" in (*Ubuntu*);; (*) exit "1$(>&2 printf '%s\n' "Please install Ubuntu, it's pretty nice.")";; esac
-   
-    >&2 printf '%s\n' 'Updating package manager caches...'
 
-    orex apt-get update
+    if [ "$(uname -s)" = "Linux" ]; then
+      case "$(uname -a)" in (*Ubuntu*);;
+         (*) exit "1$(>&2 printf '%s\n' "Please install Ubuntu, it's pretty nice.")";;
+      esac
 
+       >&2 printf '%s\n' 'Updating package manager caches...'
 
-    >&2 printf '%s\n' 'Installing common dependencies...'
-    # Common dependencies for various packages
-    orex apt-get -y install \
-        apt-transport-https \
-        ca-certificates \
-        curl \
-        gnupg \
-        lsb-release
-   
-    >&2 printf '%s\n' 'Updating package manager caches...'
+       orex apt-get update
 
-    orex apt-get update
+       >&2 printf '%s\n' 'Installing common dependencies...'
+       # Common dependencies for various packages
+       orex apt-get -y install \
+           apt-transport-https \
+           ca-certificates \
+           curl \
+           gnupg \
+           lsb-release
 
-    >&2 printf '%s\n' 'Installing Nginx...'
-    # Nginx
-    orex apt-get -y install nginx
+       >&2 printf '%s\n' 'Updating package manager caches...'
+
+       orex apt-get update
+
+       >&2 printf '%s\n' 'Installing Nginx...'
+       # Nginx
+       orex apt-get -y install nginx
+
+    elif [ "$(uname -s)" = "Darwin" ];
+      orex install__HOMEBREW
+
+      >&2 printf '%s\n' 'Installing Nginx...'
+      orex brew install nginx
+    else
+      exit "1$(>&2 printf '%s\n' "Windows is not supported. Please try macOS or  Ubuntu Linux.")"
+    fi
 
     orex setup__MAIN__NGINX
 
@@ -89,11 +127,63 @@ export__MAIN__NGINX() {
 }
 
 
+install__MAIN__CADDY() {
+    orex [ "$(id -urn)" = "root" ]
+
+    if [ "$(uname -s)" = "Linux" ]; then
+      case "$(uname -a)" in (*Ubuntu*);;
+         (*) exit "1$(>&2 printf '%s\n' "Please install Ubuntu, it's pretty nice.")";;
+       esac
+
+       >&2 printf '%s\n' 'Updating package manager caches...'
+
+       orex apt-get update
+
+       >&2 printf '%s\n' 'Installing common dependencies...'
+       # Common dependencies for various packages
+       orex apt-get -y install \
+           apt-transport-https \
+           ca-certificates \
+           curl \
+           gnupg \
+           lsb-release
+
+       >&2 printf '%s\n' 'Updating package manager caches...'
+
+       orex apt-get update
+
+       >&2 printf '%s\n' 'Installing Caddy...'
+
+       exit "1$(>&2 printf '%s\n' "Sorry installing Caddy on Linux isn't implemented yet.")"
+
+    elif [ "$(uname -s)" = "Darwin" ];
+      orex install__HOMEBREW
+
+      >&2 printf '%s\n' 'Installing Caddy...'
+      orex brew install caddy
+    else
+      exit "1$(>&2 printf '%s\n' "Windows is not supported. Please try macOS or  Ubuntu Linux.")"
+    fi
+
+    orex setup__MAIN__CADDY
+
+}
+
+
+setup__MAIN__CADDY() {
+  set -a
+  # @TODO
+  MAIN__CADDY__HOME="${LOCAL__HOME:?}/caddy"
+  MAIN__CADDY__CMD="${MAIN__CADDY__HOME:?}/caddy"
+  MAIN__CADDY__LOGS="${MAIN__CADDY__HOME:?}/logs"
+  MAIN__CADDY__STORAGE="${MAIN__CADDY__HOME:?}/storage"
+  MAIN__CADDY__SITES="${MAIN__CADDY__HOME:?}/sites-enabled"
+  MAIN__CADDY__SITES_ALL="${MAIN__CADDY__HOME:?}/sites-available"
+  set +a
+}
 
 install__MAIN__LETSENCRYPT() {
     orex [ "$(id -urn)" = "root" ]
-
-
 
     if [ "$(uname -s)" = "Linux" ]; then
       case "$(uname -a)" in (*Ubuntu*);; (*) exit "1$(>&2 printf '%s\n' "Please install Ubuntu, it's pretty nice.")";; esac
@@ -109,6 +199,7 @@ install__MAIN__LETSENCRYPT() {
       >&2 printf '%s\n' 'Installing libsecret-tools...'
       orex apt-get -y install libsecret-tools
     elif [ "$(uname -s)" = "Darwin" ];
+      orex install__HOMEBREW
       orex brew install python3
     else
       exit "1$(>&2 printf '%s\n' "Windows is not supported. Please try macOS or  Ubuntu Linux.")"
