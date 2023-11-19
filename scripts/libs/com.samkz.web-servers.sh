@@ -12,6 +12,16 @@ com_samkz_web_servers_sh() { :; }
 orex() { "$@" || exit "$?$(>&2 printf   'ERROR[%d]: %s\n' "$?" "$*")"; }
 oret() { "$@" || return "$?$(>&2 printf 'ERROR[%d]: %s\n' "$?" "$*")"; }
 
+if (>/dev/null 2>&1 type com_samkz_utils_sh); then :; else
+  SAMKZ__UTILS_LIB_SH="${SAMKZ__UTILS_LIB_SH:-"$(
+    f="${BASH_SOURCE:?}" && [ -f "$f" ] && f="$(readlink -f -- "$f")" && d="${f%/*}";
+    for f in "$d"/com.samkz.utils*.sh; do :; done; [ -f "$f" ] && readlink -f -- "$f";
+  )"}"
+
+  orex . "${SAMKZ__UTILS_LIB_SH:?}"
+fi
+
+
 quote() { printf '%s\n' "$1" | sed "s/'/'\\\\''/g;1s/^/'/;\$s/\$/'/" ; }
 
 canon_file() { [ -n "$1" ] && [ -f "$1" ] && readlink -f -- "$1"; }
@@ -19,13 +29,6 @@ canon_dir() { [ -n "$1" ] && [ -d "$1" ] && readlink -f -- "$1"; }
 canon_exe() { [ -n "$1" ] && [ -f "$1" ] && [ -x "$1" ] && readlink -f -- "$1"; }
 
 
-SAMKZ__UTILS_LIB_SH="${SAMKZ__UTILS_LIB_SH:-"$(
-  f="${BASH_SOURCE:?}" && [ -f "$f" ] && f="$(readlink -f -- "$f")" && d="${f%/*}";
-  for f in "$d"/com.samkz.utils*.sh; do :; done
-  canon_file "$f"
-)"}"
-
-orex . "${SAMKZ__UTILS_LIB_SH:?}"
 
 
 is_binary() { [ -f "${1-}" ] || return; case "$(orex file "${1:?}")" in (*executable*) return 0;; esac; return 1; }
@@ -34,7 +37,7 @@ is_shell_program() { [ -f "${1-}" ] && [ -x "$1" ] || return; case "$(orex file 
 
 get_super_group() { if [ "$(uname -s)" = Darwin ]; then printf '%s\n' 'staff'; else printf '%s\n' 'sudo'; fi; }
 
-${LOCAL__USER:+:} orex samkz__local_user_export
+
 
 samkz__homebrew__install() {
   [ "$(uname -s)" = "Darwin" ] || return 0
@@ -218,6 +221,8 @@ samkz__caddy__install() {
 
 
 samkz__caddy__setup() {
+  ${LOCAL__HOME:+:} orex samkz__local_user_export
+
   set -a
   # @TODO
   MAIN__CADDY__HOME="${LOCAL__HOME:?}/caddy"
@@ -334,6 +339,8 @@ samkz__letsencrypt__setup() {
 }
 
 samkz__letsencrypt__export() {
+  ${LOCAL__ETC:+:} orex samkz__local_user_export
+
   #   -c CONFIG_FILE, --config CONFIG_FILE
   #                     path to config file (default: /etc/letsencrypt/cli.ini
   #                     and ~/.config/letsencrypt/cli.ini)
