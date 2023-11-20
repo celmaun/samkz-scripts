@@ -22,7 +22,7 @@ is_binary() { [ -f "${1-}" ] || return; case "$(orex file "${1:?}")" in (*execut
 is_shell_script() { [ -f "${1-}" ] || return; case "$(orex file "${1:?}")" in (*shell*script*) return 0;; esac; return 1; }
 is_shell_program() { [ -f "${1-}" ] && [ -x "$1" ] || return; case "$(orex file "${1:?}")" in (*shell*script*) return 0;; esac; return 1; }
 
-get_home() ( u="$(id -urn "$@")" && eval "h=~${u:?}" && printf '%s\n' "${h:?}"; )
+get_home() ( u="$(get_user "${1-}")" && eval "h=~${u:?}" && printf '%s\n' "${h:?}"; )
 
 get_user() (
   if [ "${1:--}" = '-' ]; then
