@@ -182,6 +182,7 @@ samkz__local_user() (
 
     exit "1$(>&2 printf '%s\n' "Unable to find non-root user")"
 )
+
 samkz__local_user_export() {
     set -a
     LOCAL__USER="$(id -urn)"
