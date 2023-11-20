@@ -3,7 +3,7 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2317,SC2046
 
-{ type com_samkz_utils_sh && return; } >/dev/null 2>&1
+{ [ -n "${-##*i*}" ] && type com_samkz_utils_sh && return; } >/dev/null 2>&1
 
 set -a
 
@@ -24,11 +24,82 @@ is_shell_program() { [ -f "${1-}" ] && [ -x "$1" ] || return; case "$(orex file 
 
 get_home() ( u="$(id -urn "$@")" && eval "h=~${u:?}" && printf '%s\n' "${h:?}"; )
 
+get_user() (
+  if [ "${1:--}" = '-' ]; then
+    id -urn; exit;
+  fi
+  orex id -urn "${1:?}"
+ )
+
 file_user() { [ -e "$1" ] && (x="$(command ls -ld "$1")" || exit; set -f -- ${x:?} || exit; user="${3-}"; id -urn "${user:?}"); }
 file_group() { [ -e "$1" ] && (x="$(command ls -ld "$1")" || exit; set -f -- ${x:?} || exit; group="${4-}"; printf '%s\n' "${group:?}"); }
 file_user_colon_group() { [ -e "$1" ] && (x="$(command ls -ld "$1")" || exit; set -f -- ${x:?} || exit; user="${3-}"; group="${4-}"; printf '%s:%s\n' "$(id -urn "${user:?}")" "${group:?}"); }
 
 get_super_group() { if [ "$(uname -s)" = Darwin ]; then printf '%s\n' 'staff'; else printf '%s\n' 'sudo'; fi; }
+
+
+## macOS id command ##
+#     -P      Display the id as a password file entry.
+# EXAMPLES
+# Show information for the user ‘bob’ as a password file entry:
+# id -P bob
+# bob:*:0:0::0:0:Robert:/bob:/usr/local/bin/bash
+
+# Ubuntu getent command
+# ubuntu@ip-172-31-22-234:~$ getent passwd salmatron
+# salmatron:x:17007:17007::/home/salmatron:/bin/bash
+
+getent_passwd_user() (
+  set -a
+  orex() { "$@" || exit "$?$(>&2 printf 'ERROR[%d]: %s\n' "$?" "$*")"; }
+  set +a
+
+  set +e -f -u
+
+  user=$(orex get_user "${1-}") || exit
+
+  if [ "$(uname -s)" = Darwin ]; then
+    orex id -P "${user:?}"; exit
+  fi
+
+  orex getent passwd "${user:?}"
+)
+
+getent_passwd_user_field() (
+  set -a
+  orex() { "$@" || exit "$?$(>&2 printf 'ERROR[%d]: %s\n' "$?" "$*")"; }
+  set +a
+
+  set +e -f -u
+
+  user=$(orex get_user "${1-}") || exit
+
+  field="${2:-0}"; field="$(printf '%d' "${field:?}")" || exit
+  entry="$(orex getent_passwd_user "${user:?}")" || exit
+
+  export IFS=":"; set -f; set -- ${entry:?};
+  shift "${field:?}"; field_value="${1-}"
+
+  ${field_value:+false} || printf '%s\n' "${field_value?}"
+)
+
+getent_home_user() (
+  set -a
+  orex() { "$@" || exit "$?$(>&2 printf 'ERROR[%d]: %s\n' "$?" "$*")"; }
+  set +a
+
+  set +e -u
+
+  user=$(orex get_user "${1-}") || exit
+
+  entry="$(orex getent_passwd_user "${user:?}")" || exit
+
+  export IFS=":"; set -f; set -- ${entry:?}; shift 8; printf '%s\n' "${1:?}"
+)
+
+getent_user_shell() {
+  oret getent_passwd_user_field "${1-}" 9
+}
 
 local_user_owner() {
   [ "$(id -ur)" -eq 0 ] || return 0
