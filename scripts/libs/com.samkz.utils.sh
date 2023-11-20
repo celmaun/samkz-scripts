@@ -167,29 +167,21 @@ samkz__import_env() {
   unset program env_file
 }
 
-samkz__local_user() {
+samkz__local_user() (
     set +e -u
 
-    u=
-    for _ in _; do
-      u="$(id -urn)"; [ -z "${u##root}" ] || break
-      u="$(id -un)"; [ -z "${u##root}" ] || break
-      u="$(logname)"; [ -z "${u##root}" ] || break
-      u="$(who am i)"; u="${u%% *}"; [ -z "${u##root}" ] || break
-      u="${SUDO_USER:-}"; [ -z "${u##root}" ] || break
-    done
+    set -- "${USER-}" "${SUDO_USER-}" "$(id -urn)" "$(id -un)" "$(logname)" "$(who am i | cut -w -f 1 -)"
 
-    [ -n "${u##root}" ] && printf '%s\n' "${u:?}" && exit
+    set +u
+    while [ -z "${1##root}" ] && 2>/dev/null shift; do :; done
+    [ -n "${1##root}" ] && id -urn "${1:?}" && exit
 
-    # set -- "${BASH_SOURCE-}" "${0-}" "${HOME-}" "$PWD"
+    set -- "${BASH_SOURCE-}" "${0-}" "${HOME-}" "$PWD"
 
-    for f in "${BASH_SOURCE-}" "${0-}" "${HOME-}" "$PWD"; do
-      u="$(file_user "$f")" && [ -n "${u##root}" ] && id -urn "${u:?}" && exit
-    done
+    for f; do u="$(file_user "$f")" && [ -n "${u##root}" ] && id -urn "${u:?}" && exit; done
 
     exit "1$(>&2 printf '%s\n' "Unable to find non-root user")"
-}
-
+)
 samkz__local_user_export() {
     set -a
     LOCAL__USER="$(id -urn)"
