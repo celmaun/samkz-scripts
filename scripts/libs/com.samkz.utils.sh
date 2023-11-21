@@ -83,23 +83,9 @@ getent_passwd_user_field() (
   ${field_value:+false} || printf '%s\n' "${field_value?}"
 )
 
-getent_home_user() (
-  set -a
-  orex() { "$@" || exit "$?$(>&2 printf 'ERROR[%d]: %s\n' "$?" "$*")"; }
-  set +a
+getent_home_user() { oret getent_passwd_user_field "${1-}" '8'; }
 
-  set +e -u
-
-  user=$(orex get_user "${1-}") || exit
-
-  entry="$(orex getent_passwd_user "${user:?}")" || exit
-
-  export IFS=":"; set -f; set -- ${entry:?}; shift 8; printf '%s\n' "${1:?}"
-)
-
-getent_user_shell() {
-  oret getent_passwd_user_field "${1-}" 9
-}
+getent_user_shell() { oret getent_passwd_user_field "${1-}" '9'; }
 
 local_user_owner() {
   [ "$(id -ur)" -eq 0 ] || return 0
@@ -131,6 +117,13 @@ samkz__print_env_prefixed() (
   export -p | sed -E -n "s/^export ($(IFS='|'; printf %s "$*"))/\1/p"
 )
 
+samkz__print_env_prefixed_grep() (
+  [ $# -gt 0 ] || return
+  { builtin shopt -so posix ||:; }>/dev/null 2>&1
+  prefix="$(printf '%s\|' "$@")"
+  export -p | grep "^export \(${prefix%'\|'}\)"
+)
+
 samkz__create_env_file() (
   ${LOCAL__ETC:+:} samkz__local_user_export
   orex [ -d "${LOCAL__ETC:?}" ]
@@ -150,6 +143,10 @@ samkz__create_env_file() (
 
   samkz__print_env_prefixed "${prefix:?}" | sort -uo "${env_file:?}"
   samkz__chown "${env_file:?}"
+  if [ "$program" = "user" ]; then
+    cp -a "${env_file:?}" "${env_file%/*}/admin.env"
+    sed -i 's/^LOCAL__/ADMIN__/g' "${env_file%/*}/admin.env"
+  fi
 )
 
 str_trim() { printf '%s\n' "${1#*[\![:space:]]}"; }
@@ -206,7 +203,7 @@ samkz__local_user_export() {
     LOCAL__EUID="$(id -u "${LOCAL__USER:?}")"
     LOCAL__GID="$(id -gr "${LOCAL__USER:?}")"
     LOCAL__EGID="$(id -g "${LOCAL__USER:?}")"
-    eval "LOCAL__HOME=~${LOCAL__USER:?}"; export LOCAL__HOME
+    LOCAL__HOME="$(getent_home_user "${LOCAL__USER:?}")"
     LOCAL__ETC="${LOCAL__HOME:?}/.config"
     set +a
     [ -d "$LOCAL__ETC" ] || { mkdir "$LOCAL__ETC"; [ "$(id -ur)" -gt 0 ] || chown "$LOCAL__USER:" "$LOCAL__ETC"; }
