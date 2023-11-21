@@ -143,6 +143,7 @@ samkz__create_env_file() (
 
   samkz__print_env_prefixed "${prefix:?}" | sort -uo "${env_file:?}"
   samkz__chown "${env_file:?}"
+
   if [ "$program" = "user" ]; then
     cp -a "${env_file:?}" "${env_file%/*}/admin.env"
     sed -i 's/^LOCAL__/ADMIN__/g' "${env_file%/*}/admin.env"
@@ -150,6 +151,14 @@ samkz__create_env_file() (
 )
 
 str_trim() { printf '%s\n' "${1#*[\![:space:]]}"; }
+
+is_truthy() {
+  case "$(printf '%s\n' "${1#*[\![:space:]]}")" in
+    (1 | [Tt] | [Tt][Rr][Uu][Ee] | [Yy] | [Yy][Ee][Ss] | [Jj] | [Jj][Aa] ) return 0;;
+  esac
+
+  return 1
+}
 
 samkz__is_clean_all() (
   ${SAMKZ__CLEAN_ALL:+:} exit 1
