@@ -165,21 +165,20 @@ samkz__is_clean_all() (
 )
 
 samkz__import_env() {
-  program="$1"; : "${program:?}"
-  env_file="${LOCAL__ETC:-"$(samkz__local_user_export && printf '%s\n' "${LOCAL__ETC:?}")"}/${program:?}.env"
+  # $1 = program
+  # $2 = generated env: /some/path/$program.env
 
-  samkz__is_clean_all && rm -f "$env_file"
+  set -- "$1" "${LOCAL__ETC:-"$(samkz__local_user_export && printf '%s\n' "${LOCAL__ETC:?}")"}/${1:?}.env"
 
+  samkz__is_clean_all && rm -f "$2"
 
-  if [ -f "$env_file" ]; then
-    samkz__create_env_file "$program"
+  if [ -f "$2" ]; then
+    samkz__create_env_file "$1"
   fi
 
-  orex [ -f "$env_file" ]
+  orex [ -f "$2" ]
 
-  set -a; orex . "$env_file"; set +a
-
-  unset program env_file
+  set -a; orex . "$2"; set +a
 }
 
 samkz__local_user() (
