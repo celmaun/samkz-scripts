@@ -152,29 +152,12 @@ samkz__create_env_file() (
   samkz__chown "${env_file:?}"
 )
 
-
-# https://github.com/dylanaraps/pure-sh-bible#trim-leading-and-trailing-white-space-from-string
-
-samkz__str_trim() (
-    # Usage: samkz__str_trim "   example   string    "
-
-    # Remove all leading white-space.
-    # '${1%%[![:space:]]*}': Strip everything but leading white-space.
-    # '${1#${XXX}}': Remove the white-space from the start of the string.
-    str=${1#${1%%[![:space:]]*}}
-
-    # Remove all trailing white-space.
-    # '${str##*[![:space:]]}': Strip everything but trailing white-space.
-    # '${str%${XXX}}': Remove the white-space from the end of the string.
-    str=${str%${str##*[![:space:]]}}
-
-    printf '%s\n' "$str"
-)
+str_trim() { printf '%s\n' "${1#*[\![:space:]]}"; }
 
 samkz__is_clean_all() (
   ${SAMKZ__CLEAN_ALL:+:} exit 1
 
-  case "$(samkz__str_trim "${SAMKZ__CLEAN_ALL}")" in
+  case "$(str_trim "${SAMKZ__CLEAN_ALL}")" in
      (1 | [Tt] | [Tt][Rr][Uu][Ee] | [Yy] | [Yy][Ee][Ss] | [Jj] | [Jj][Aa] ) exit 0;;
   esac
 
@@ -185,7 +168,10 @@ samkz__import_env() {
   program="$1"; : "${program:?}"
   env_file="${LOCAL__ETC:-"$(samkz__local_user_export && printf '%s\n' "${LOCAL__ETC:?}")"}/${program:?}.env"
 
-  if samkz__is_clean_all || [ ! -f "$env_file" ]; then
+  samkz__is_clean_all && rm -f "$env_file"
+
+
+  if [ -f "$env_file" ]; then
     samkz__create_env_file "$program"
   fi
 
