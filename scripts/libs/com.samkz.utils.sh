@@ -173,26 +173,63 @@ samkz__create_env_file() (
   fi
 )
 
-str_trim() { printf '%s\n' "${1#*[\![:space:]]}"; }
-
 str_quote_x() (
   str="$(printf '%s\n' "${1}EOF" | sed "s/'/'\\\\''/g;1s/^/'/;\$s/\$/'/")"
   printf '%s\n' "${str%EOF'}'"
 )
+trim_string() {
+    # Usage: trim_string "   example   string    "
 
+    # Remove all leading white-space.
+    # '${1%%[![:space:]]*}': Strip everything but leading white-space.
+    # '${1#${XXX}}': Remove the white-space from the start of the string.
+    trim=${1#${1%%[![:space:]]*}}
+
+    # Remove all trailing white-space.
+    # '${trim##*[![:space:]]}': Strip everything but trailing white-space.
+    # '${trim%${XXX}}': Remove the white-space from the end of the string.
+    trim=${trim%${trim##*[![:space:]]}}
+
+    printf '%s\n' "$trim"
+}
+
+# str_trim() { set -f; for x in $1; do break; done; printf '%s\n' "$x${1#*$x}"; }
+
+str_trim() { ${1:+:} return 0; set -- "$1" "$(set -f; printf '%.1s' ${1%[![:space:]]*})"; printf '%s\n' "${2}${1#*${2}}"; }
 
 is_truthy() {
-  case "$(printf '%s\n' "${1#*[\![:space:]]}")" in
+  case "$(str_trim "${1-}")" in
     (1 | [Tt] | [Tt][Rr][Uu][Ee] | [Yy] | [Yy][Ee][Ss] | [Jj] | [Jj][Aa] ) return 0;;
   esac
 
   return 1
 }
 
+to_bool() { :;  }
+
 is_in_PATH() {
    ${1:+:} return 1
    case ":$PATH:" in (*:"${1:?}":*);; (*) { return 1; } ;; esac
 }
+
+samkz__lib_config_env_nullify() {
+  export SAMKZ__CLEAN_ALL=
+  export SAMKZ__CLEAN_USER=
+  export SAMKZ__CLEAN_ADMIN=
+  export SAMKZ__CLEAN_NGINX=
+  export SAMKZ__CLEAN_CADDY=
+  export SAMKZ__CLEAN_LETSENCRYPT=
+}
+
+samkz__lib_config_env_normalize() {
+  export SAMKZ__CLEAN_ALL=
+  export SAMKZ__CLEAN_USER=
+  export SAMKZ__CLEAN_ADMIN=
+  export SAMKZ__CLEAN_NGINX=
+  export SAMKZ__CLEAN_CADDY=
+  export SAMKZ__CLEAN_LETSENCRYPT=
+}
+
 
 samkz__is_clean_all() { is_truthy "${SAMKZ__CLEAN_ALL-}"; }
 
