@@ -176,7 +176,8 @@ samkz__create_env_file() (
 str_quote_x() (
   str="$(printf '%s\n' "${1}EOF" | sed "s/'/'\\\\''/g;1s/^/'/;\$s/\$/'/")"
   printf '%s\n' "${str%EOF'}'"
-)
+}
+
 trim_string() {
     # Usage: trim_string "   example   string    "
 
@@ -195,10 +196,10 @@ trim_string() {
 
 # str_trim() { set -f; for x in $1; do break; done; printf '%s\n' "$x${1#*$x}"; }
 
-str_trim() { ${1:+:} return 0; set -- "$1" "$(set -f; printf '%.1s' ${1%[![:space:]]*})"; printf '%s\n' "${2}${1#*${2}}"; }
+# str_trim() { set -- "$1" "$(set -f; IFS=; printf '%.1s' $*)"; ${2:+:} return 0; printf '%s\n' "${2}${1#*${2}}"; }
 
 is_truthy() {
-  case "$(str_trim "${1-}")" in
+  case "$(trim_string "${1-}")" in
     (1 | [Tt] | [Tt][Rr][Uu][Ee] | [Yy] | [Yy][Ee][Ss] | [Jj] | [Jj][Aa] ) return 0;;
   esac
 
