@@ -198,6 +198,9 @@ trim_string() {
 
 # str_trim() { set -- "$1" "$(set -f; IFS=; printf '%.1s' $*)"; ${2:+:} return 0; printf '%s\n' "${2}${1#*${2}}"; }
 
+
+str_trim() { set -- "$1" "$(set -f -- $1; printf '%.1s' "$1")"; ${2:+:} return 0; printf '%s\n' "${2}${1#*${2}}"; }
+
 is_truthy() {
   case "$(trim_string "${1-}")" in
     (1 | [Tt] | [Tt][Rr][Uu][Ee] | [Yy] | [Yy][Ee][Ss] | [Jj] | [Jj][Aa] ) return 0;;
