@@ -87,6 +87,29 @@ getent_home_user() { oret getent_passwd_user_field "${1-}" '8'; }
 
 getent_user_shell() { oret getent_passwd_user_field "${1-}" '9'; }
 
+is_local_owner() {
+  # $1 = file/dir/link
+  ( file="${1-}"; file="${file:?}"; ) || return
+  ${LOCAL__USER:+:} samkz__local_user_export
+  is_user_owner "${LOCAL__USER:?}" "${1:?}" || return
+}
+
+is_user_owner() (
+  # $1 = user
+  # $2 = file/dir/link
+  owner_user="${1-}"; owner_user="$(id -urn "${owner_user:?}")"
+  file="${2-}"; file="${file:?}"
+
+  [ -n "$(2>/dev/null find "${2:?}" -maxdepth 0 -user "${1:?}" -print -quit ||:)" ] || return
+)
+
+is_group_owner() {
+  # $1 = group
+  # $2 = file/dir/link
+  ( owner_group="${1-}"; file="${2-}"; owner_group="${owner_group:?}"; file="${file:?}"; ) || return
+  [ -n "$(2>/dev/null find "${2:?}" -maxdepth 0 -grouo "${1:?}" -print -quit ||:)" ] || return
+}
+
 local_user_owner() {
   [ "$(id -ur)" -eq 0 ] || return 0
 
@@ -152,6 +175,12 @@ samkz__create_env_file() (
 
 str_trim() { printf '%s\n' "${1#*[\![:space:]]}"; }
 
+str_quote_x() (
+  str="$(printf '%s\n' "${1}EOF" | sed "s/'/'\\\\''/g;1s/^/'/;\$s/\$/'/")"
+  printf '%s\n' "${str%EOF'}'"
+)
+
+
 is_truthy() {
   case "$(printf '%s\n' "${1#*[\![:space:]]}")" in
     (1 | [Tt] | [Tt][Rr][Uu][Ee] | [Yy] | [Yy][Ee][Ss] | [Jj] | [Jj][Aa] ) return 0;;
@@ -160,15 +189,12 @@ is_truthy() {
   return 1
 }
 
-samkz__is_clean_all() (
-  ${SAMKZ__CLEAN_ALL:+:} exit 1
+is_in_PATH() {
+   ${1:+:} return 1
+   case ":$PATH:" in (*:"${1:?}":*);; (*) { return 1; } ;; esac
+}
 
-  case "$(str_trim "${SAMKZ__CLEAN_ALL}")" in
-     (1 | [Tt] | [Tt][Rr][Uu][Ee] | [Yy] | [Yy][Ee][Ss] | [Jj] | [Jj][Aa] ) exit 0;;
-  esac
-
-  exit 1
-)
+samkz__is_clean_all() { is_truthy "${SAMKZ__CLEAN_ALL-}"; }
 
 samkz__import_env() {
   # $1 = program
