@@ -172,11 +172,11 @@ samkz__create_env_file() (
     sed -i 's/^LOCAL__/ADMIN__/g' "${env_file%/*}/admin.env"
   fi
 )
-
-str_quote_x() (
-  str="$(printf '%s\n' "${1}EOF" | sed "s/'/'\\\\''/g;1s/^/'/;\$s/\$/'/")"
-  printf '%s\n' "${str%EOF'}'"
-}
+#
+#str_quote_x() (
+#  str="$(printf '%s\n' "${1}EOF" | sed "s/'/'\\\\''/g;1s/^/'/;\$s/\$/'/")"
+#  printf '%s\n' "${str%EOF'}'"
+#}
 
 trim_string() {
     # Usage: trim_string "   example   string    "
@@ -201,19 +201,39 @@ trim_string() {
 
 str_trim() { set -- "$1" "$(set -f -- $1; printf '%.1s' "$1")"; ${2:+:} return 0; printf '%s\n' "${2}${1#*${2}}"; }
 
+
+str_trim() { set -- "$1" "$(set -f -- $1; printf %s "$1")"; ${2:+:} return 0; printf '%s\n' "${2}${1#*${2}}"; }
+
+samkz__pattern_truthy() {
+  set -f -- '[Tt]' '[Tt][Rr][Uu][Ee]' '[Yy]' '[Yy][Ee][Ss]' '[Jj]' '[Jj][Aa]'
+  printf %s '1 '; printf ' | %s ' "$@"
+}
+
 is_truthy() {
-  case "$(trim_string "${1-}")" in
-    (1 | [Tt] | [Tt][Rr][Uu][Ee] | [Yy] | [Yy][Ee][Ss] | [Jj] | [Jj][Aa] ) return 0;;
-  esac
+  ${1:+:} return 1
+
+  case "$(set -f -- $1; printf %s "$1")" in ( $(samkz__pattern_truthy) ) return 0;; esac
 
   return 1
 }
 
-to_bool() { :;  }
+first_word() ( set -f -- $1; printf %s "$1"; )
+
+# Empty output on false, 1 on true
+to_true_one() {
+  ${1:+:} return 0
+
+  case "$(set -f -- $1; printf %s "$1")" in ( $(samkz__pattern_truthy) );;
+   (*) return 0;;
+  esac
+
+  printf %s 1
+}
 
 is_in_PATH() {
    ${1:+:} return 1
    case ":$PATH:" in (*:"${1:?}":*);; (*) { return 1; } ;; esac
+   return 0
 }
 
 samkz__lib_config_env_nullify() {
@@ -226,12 +246,12 @@ samkz__lib_config_env_nullify() {
 }
 
 samkz__lib_config_env_normalize() {
-  export SAMKZ__CLEAN_ALL=
-  export SAMKZ__CLEAN_USER=
-  export SAMKZ__CLEAN_ADMIN=
-  export SAMKZ__CLEAN_NGINX=
-  export SAMKZ__CLEAN_CADDY=
-  export SAMKZ__CLEAN_LETSENCRYPT=
+   ${SAMKZ__CLEAN_ALL+false} || { SAMKZ__CLEAN_ALL="$(to_true_one "${SAMKZ__CLEAN_ALL-}")"; export SAMKZ__CLEAN_ALL; }
+   ${SAMKZ__CLEAN_USER+false} || { SAMKZ__CLEAN_USER="$(to_true_one "${SAMKZ__CLEAN_USER-}")"; export SAMKZ__CLEAN_USER; }
+   ${SAMKZ__CLEAN_ADMIN+false} || { SAMKZ__CLEAN_ADMIN="$(to_true_one "${SAMKZ__CLEAN_ADMIN-}")"; export SAMKZ__CLEAN_ADMIN; }
+   ${SAMKZ__CLEAN_NGINX+false} || { SAMKZ__CLEAN_NGINX="$(to_true_one "${SAMKZ__CLEAN_NGINX-}")"; export SAMKZ__CLEAN_NGINX; }
+   ${SAMKZ__CLEAN_CADDY+false} || { SAMKZ__CLEAN_CADDY="$(to_true_one "${SAMKZ__CLEAN_CADDY-}")"; export SAMKZ__CLEAN_CADDY; }
+   ${SAMKZ__CLEAN_LETSENCRYPT+false} || { SAMKZ__CLEAN_LETSENCRYPT="$(to_true_one "${SAMKZ__CLEAN_LETSENCRYPT-}")"; export SAMKZ__CLEAN_LETSENCRYPT; }
 }
 
 
