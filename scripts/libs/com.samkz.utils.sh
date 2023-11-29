@@ -37,6 +37,62 @@ file_user_colon_group() { [ -e "$1" ] && (x="$(command ls -ld "$1")" || exit; se
 
 get_super_group() { if [ "$(uname -s)" = Darwin ]; then printf '%s\n' 'staff'; else printf '%s\n' 'sudo'; fi; }
 
+is_darwin() {
+    set -a
+    case "$(uname -s)" in
+        (*[Dd]arwin*) { is_darwin() { true; }; };;
+        (*) { is_darwin() { false; }; };;
+    esac
+    set +a
+
+    is_darwin
+}
+
+is_linux() {
+    set -a
+    case "$(uname -s)" in
+        (*[Ll]inux*) { is_linux() { true; }; };;
+        (*) { is_linux() { false; }; };;
+    esac
+    set +a
+
+    is_linux
+}
+
+is_windows() { ! (is_linux && is_macos); }
+
+is_macos() {
+    set -a
+    case "$(uname -s)" in
+        (*[Dd]arwin*) { is_macos() { true; }; };;
+        (*) { is_macos() { false; }; };;
+    esac
+    set +a
+
+    is_macos
+}
+
+is_arm64() {
+    set -a
+    case "$(uname -m)" in
+        (arm64 | aarch64* | armv8[bl]) { is_arm64() { true; }; };;
+        (*) { is_arm64() { false; }; };;
+    esac 
+    set +a
+
+    is_arm64
+}
+
+is_amd64() {
+    set -a
+    case "$(uname -m)" in
+        (amd64 | x*"64") { is_amd64() { true; }; };;
+        (*) { is_amd64() { false; }; };;
+    esac
+    set +a
+
+    is_amd64
+}
 
 ## macOS id command ##
 #     -P      Display the id as a password file entry.
@@ -137,14 +193,14 @@ samkz__chown() (
 
 samkz__print_env_prefixed() (
   { builtin shopt -so posix ||:; }>/dev/null 2>&1
-  export -p | sed -E -n "s/^export ($(IFS='|'; printf %s "$*"))/\1/p"
+  export -p | orex sed -E -n "s/^export ($(IFS='|'; printf %s "$*"))/\1/p"
 )
 
 samkz__print_env_prefixed_grep() (
   [ $# -gt 0 ] || return
   { builtin shopt -so posix ||:; }>/dev/null 2>&1
   prefix="$(printf '%s\|' "$@")"
-  export -p | grep "^export \(${prefix%'\|'}\)"
+  export -p | orex grep "^export \(${prefix%'\|'}\)"
 )
 
 samkz__create_env_file() (
@@ -164,12 +220,12 @@ samkz__create_env_file() (
 
   : "${prefix:?"Invalid program '$program'. Valid values: user, nginx, letsencrypt, caddy"}"
 
-  samkz__print_env_prefixed "${prefix:?}" | sort -uo "${env_file:?}"
-  samkz__chown "${env_file:?}"
+  orex samkz__print_env_prefixed "${prefix:?}" | orex sort -uo "${env_file:?}"
+  orex samkz__chown "${env_file:?}"
 
   if [ "$program" = "user" ]; then
-    cp -a "${env_file:?}" "${env_file%/*}/admin.env"
-    sed -i 's/^LOCAL__/ADMIN__/g' "${env_file%/*}/admin.env"
+    orex cp -a "${env_file:?}" "${env_file%/*}/admin.env"
+    orex sed -i 's/^LOCAL__/ADMIN__/g' "${env_file%/*}/admin.env"
   fi
 )
 #
@@ -354,7 +410,7 @@ samkz__local_user_bin_export() {
       orex chown "${LOCAL__USER:?}:" "${LOCAL__BIN:?}"
     fi
 
-    case ":$PATH:" in (*:"${LOCAL__BIN:?}":*);; (*) PATH="${LOCAL__BIN:?}${PATH:+:$PATH}";; esac
+    case ":$PATH:" in (*:"${LOCAL__BIN:?}":*);; (*) { PATH="${LOCAL__BIN:?}${PATH:+:$PATH}"; };; esac
 }
 
 
