@@ -107,7 +107,7 @@ is_group_owner() {
   # $1 = group
   # $2 = file/dir/link
   ( owner_group="${1-}"; file="${2-}"; owner_group="${owner_group:?}"; file="${file:?}"; ) || return
-  [ -n "$(2>/dev/null find "${2:?}" -maxdepth 0 -grouo "${1:?}" -print -quit ||:)" ] || return
+  [ -n "$(2>/dev/null find "${2:?}" -maxdepth 0 -group "${1:?}" -print -quit ||:)" ] || return
 }
 
 local_user_owner() {
@@ -194,15 +194,32 @@ trim_string() {
     printf '%s\n' "$trim"
 }
 
-# str_trim() { set -f; for x in $1; do break; done; printf '%s\n' "$x${1#*$x}"; }
+str_trim() {
+    ${1:+:} return 0
 
-# str_trim() { set -- "$1" "$(set -f; IFS=; printf '%.1s' $*)"; ${2:+:} return 0; printf '%s\n' "${2}${1#*${2}}"; }
+    s="$(set -f; printf '%s' $1)"
 
+    if [ ${#s} -lt 3 ]; then 
+        printf '%s' "$s"; return
+    fi
 
-str_trim() { set -- "$1" "$(set -f -- $1; printf '%.1s' "$1")"; ${2:+:} return 0; printf '%s\n' "${2}${1#*${2}}"; }
+    # First char after leading whitespace (if any)
+    a="${s%"${s#?}"}"
+    # Last char before trailing whitespace (if any)
+    z="${s#"${s%?}"}"
 
+    # Leading whitespace (if any)
+    pre="${1%%"$a"*}"
+    # Trailing whitespace (if any)
+    post="${1##*"$z"}"
 
-str_trim() { set -- "$1" "$(set -f -- $1; printf %s "$1")"; ${2:+:} return 0; printf '%s\n' "${2}${1#*${2}}"; }
+    out="$1"
+    out="${out#"$pre"}"
+    out="${out%"$post"}"
+
+    printf %s "$out"
+}
+
 
 samkz__pattern_truthy() {
   set -f -- '[Tt]' '[Tt][Rr][Uu][Ee]' '[Yy]' '[Yy][Ee][Ss]' '[Jj]' '[Jj][Aa]'
@@ -212,7 +229,7 @@ samkz__pattern_truthy() {
 is_truthy() {
   ${1:+:} return 1
 
-  case "$(set -f -- $1; printf %s "$1")" in ( $(samkz__pattern_truthy) ) return 0;; esac
+  case "$(set -f -- $1; printf %s "$1")" in ( $(samkz__pattern_truthy) ) { return 0; };; esac
 
   return 1
 }
@@ -224,7 +241,7 @@ to_true_one() {
   ${1:+:} return 0
 
   case "$(set -f -- $1; printf %s "$1")" in ( $(samkz__pattern_truthy) );;
-   (*) return 0;;
+   (*) { return 0; };;
   esac
 
   printf %s 1
@@ -232,7 +249,7 @@ to_true_one() {
 
 is_in_PATH() {
    ${1:+:} return 1
-   case ":$PATH:" in (*:"${1:?}":*);; (*) { return 1; } ;; esac
+   case ":$PATH:" in (*:"${1:?}":*);; (*) { return 1; };; esac
    return 0
 }
 
@@ -314,6 +331,7 @@ samkz__local_user_bin_export() {
         set +a -u
 
         h="${LOCAL__HOME:?}"
+        
         set -- "$h/bin" "$h/.bin" "$h/.local/bin"
         for d; do
             case ":$PATH:" in (*:"$d":*) { printf '%s\n' "$d" && exit; };; esac;
