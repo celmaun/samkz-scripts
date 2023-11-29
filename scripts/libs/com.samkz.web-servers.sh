@@ -100,7 +100,7 @@ samkz__nginx__install() {
 }
 
 samkz__nginx__setup() {
-   >&2 printf '%s\n' 'Setting up Nginx...'
+    >&2 printf '%s\n' 'Setting up Nginx...'
 
     orex samkz__nginx__export
 
@@ -108,13 +108,13 @@ samkz__nginx__setup() {
     orex [ -d "${MAIN__NGINX__SITES:?}" ]
 
     if [ "$(id -urn)" = "root" ]; then
-      orex chgrp -R "$(get_super_group)" \
-      "${MAIN__NGINX__ETC:?}" \
-      "${MAIN__NGINX__SITES:?}"
+        orex chgrp -R "$(get_super_group)" \
+            "${MAIN__NGINX__ETC:?}" \
+            "${MAIN__NGINX__SITES:?}"
 
-      orex chmod -R g+rwX \
-      "${MAIN__NGINX__ETC:?}" \
-      "${MAIN__NGINX__SITES:?}"
+        orex chmod -R g+rwX \
+            "${MAIN__NGINX__ETC:?}" \
+            "${MAIN__NGINX__SITES:?}"
     fi
 
 }
@@ -144,7 +144,7 @@ samkz__nginx__export() {
 samkz__require_ubuntu() {
   for _ in _; do
     [ "$(uname -s)" = "Linux" ] || break
-     case "$(uname -a)" in (*Ubuntu*) return 0;; esac
+     case "$(uname -a)" in (*Ubuntu*) { return 0; };; esac
   done
 
   exit "1$(>&2 printf '%s\n' "Please install Ubuntu, it's pretty nice.")"
@@ -156,7 +156,7 @@ samkz__nginx__service() {
   subcommand="$1"; : "${subcommand:?}"
 
   case "$subcommand" in (stop|start|restart);;
-    (*) exit "1$(>&2 printf '%s\n' "samkz__nginx__service: Invalid subcommand '$subcommand'. Accepted: stop, start, restart")"
+    (*) { exit "1$(>&2 printf '%s\n' "samkz__nginx__service: Invalid subcommand '$subcommand'. Accepted: stop, start, restart")"; };;
   esac
 
   if [ "$(uname -s)" = "Linux" ]; then
@@ -168,7 +168,7 @@ samkz__nginx__service() {
     >&2 printf '%s\n' "Nginx service to $subcommand..."
     orex brew services "$subcommand" nginx
   else
-    exit "1$(>&2 printf '%s\n' "Windows is not supported. Please try macOS or  Ubuntu Linux.")"
+    exit "1$(>&2 printf '%s\n' "Windows is not supported. Please try macOS or Ubuntu Linux.")"
   fi
 }
 
@@ -192,7 +192,7 @@ samkz__caddy__install() {
         # Stable releases:
         >&2 printf '%s\n' 'Installing common dependencies...'
        # Common dependencies for various packages
-        apt install -y debian-keyring debian-archive-keyring apt-transport-https \
+        orex apt install -y debian-keyring debian-archive-keyring apt-transport-https \
             ca-certificates curl gnupg lsb-release
 
         >&2 printf '%s\n' 'Adding APT GPG key for Caddy...'
@@ -201,10 +201,12 @@ samkz__caddy__install() {
         >&2 printf '%s\n' 'Adding APT repo for Caddy...'
         orex curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
 
+
+
         orex apt update
 
         >&2 printf '%s\n' 'Installing Caddy...'
-        orex apt install caddy
+        orex apt install -y caddy
 
     elif [ "$(uname -s)" = "Darwin" ]; then
       orex samkz__homebrew__install
@@ -261,7 +263,7 @@ samkz__letsencrypt__install() {
 
     else
 
-      exit "1$(>&2 printf '%s\n' "Windows is not supported. Please try macOS or  Ubuntu Linux.")"
+      exit "1$(>&2 printf '%s\n' "Windows is not supported. Please try macOS or Ubuntu Linux.")"
 
     fi
 
@@ -276,6 +278,7 @@ samkz__letsencrypt__install() {
     # While pip alone is sufficient to install from pre-built binary archives, up to date copies of the setuptools and wheel projects are
     # useful to ensure you can also install from source archives:
     >&2 printf '%s\n' 'Installing pip package management stuff...'
+
     oret python3 -m pip install -U pip setuptools wheel ||:
     orex pip3 install -U pip
     orex pip3 install -U pyopenssl
