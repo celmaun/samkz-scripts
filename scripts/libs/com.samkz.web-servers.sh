@@ -9,7 +9,7 @@ set -a
 
 com_samkz_web_servers_sh() { :; }
 
-orex() { "$@" || exit "$?$(>&2 printf   'ERROR[%d]: %s\n' "$?" "$*")"; }
+orex() { "$@" || exit "$?$(>&2 printf 'ERROR[%d]: %s\n' "$?" "$*")"; }
 oret() { "$@" || return "$?$(>&2 printf 'ERROR[%d]: %s\n' "$?" "$*")"; }
 
 if (>/dev/null 2>&1 type com_samkz_utils_sh); then :; else
@@ -22,14 +22,11 @@ if (>/dev/null 2>&1 type com_samkz_utils_sh); then :; else
 fi
 
 
-quote() { printf '%s\n' "$1" | sed "s/'/'\\\\''/g;1s/^/'/;\$s/\$/'/" ; }
+quote() { printf '%s\n' "$1" | orex sed "s/'/'\\\\''/g;1s/^/'/;\$s/\$/'/" ; }
 
 canon_file() { [ -n "$1" ] && [ -f "$1" ] && readlink -f -- "$1"; }
 canon_dir() { [ -n "$1" ] && [ -d "$1" ] && readlink -f -- "$1"; }
 canon_exe() { [ -n "$1" ] && [ -f "$1" ] && [ -x "$1" ] && readlink -f -- "$1"; }
-
-
-
 
 is_binary() { [ -f "${1-}" ] || return; case "$(orex file "${1:?}")" in (*executable*) return 0;; esac; return 1; }
 is_shell_script() { [ -f "${1-}" ] || return; case "$(orex file "${1:?}")" in (*shell*script*) return 0;; esac; return 1; }
@@ -37,15 +34,13 @@ is_shell_program() { [ -f "${1-}" ] && [ -x "$1" ] || return; case "$(orex file 
 
 get_super_group() { if [ "$(uname -s)" = Darwin ]; then printf '%s\n' 'staff'; else printf '%s\n' 'sudo'; fi; }
 
-
-
 samkz__homebrew__install() {
   [ "$(uname -s)" = "Darwin" ] || return 0
 
   if [ -x "$(2>/dev/null command -v brew || printf '%s\n' '/opt/homebrew/bin/brew')" ]; then :; else
     >&2 printf '%s\n' 'Installing Homebrew...'
     >&2 printf '%s\n' '... The Missing Package Manager for macOS!'
-    orex /bin/bash -xc "$(curl -fsSL "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh")"
+    orex /bin/bash -xc "$(orex curl -fsSL "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh")"
   fi
 
   orex samkz__homebrew__export
@@ -125,13 +120,13 @@ samkz__nginx__export() {
 
     for _ in _; do
         set -a
-        MAIN__NGINX__EXE="$(2>/dev/null command -v nginx)" || break
-        MAIN__NGINX__PRG="$(canon_exe "${MAIN__NGINX__EXE:?}")" || break
-        MAIN__NGINX__ETC_CONFIG="$(canon_file "$("${MAIN__NGINX__PRG:?}" -t 2>&1 | sed -n 's@^.* configuration *file *\(/.*\.conf\) test .*$@\1@p')")" || break
+        MAIN__NGINX__EXE="$(orex command -v nginx)" || break
+        MAIN__NGINX__PRG="$(orex canon_exe "${MAIN__NGINX__EXE:?}")" || break
+        MAIN__NGINX__ETC_CONFIG="$(orex canon_file "$("${MAIN__NGINX__PRG:?}" -t 2>&1 | orex sed -n 's@^.* configuration *file *\(/.*\.conf\) test .*$@\1@p')")" || break
         MAIN__NGINX__ETC="${MAIN__NGINX__ETC_CONFIG%/*}"; [ -d "$MAIN__NGINX__ETC" ] || break
-        MAIN__NGINX__SITES="$(sed -n 's@^[\t ]*include *\(.*\)/\*\;.*$@\1@p' < "${MAIN__NGINX__ETC_CONFIG:?}")"
+        MAIN__NGINX__SITES="$(orex sed -n 's@^[\t ]*include *\(.*\)/\*\;.*$@\1@p' < "${MAIN__NGINX__ETC_CONFIG:?}")"
         [ -n "${MAIN__NGINX__SITES##/*}" ] && MAIN__NGINX__SITES="${MAIN__NGINX__ETC:?}/${MAIN__NGINX__SITES:?}"
-        MAIN__NGINX__SITES="$(canon_dir "${MAIN__NGINX__SITES:?}")" || break
+        MAIN__NGINX__SITES="$(orex canon_dir "${MAIN__NGINX__SITES:?}")" || break
         set +a
         return 0
     done
@@ -177,11 +172,11 @@ samkz__caddy__install() {
     orex [ "$(id -urn)" = "root" ]
 
     if [ "$(uname -s)" = "Linux" ]; then
-      orex samkz__require_ubuntu
+        orex samkz__require_ubuntu
 
-       >&2 printf '%s\n' 'Updating package manager caches...'
+        >&2 printf '%s\n' 'Updating package manager caches...'
 
-       orex apt-get update
+        orex apt-get update
 
         # https://caddyserver.com/docs/install#debian-ubuntu-raspbian
         # Debian, Ubuntu, Raspbian
@@ -196,12 +191,10 @@ samkz__caddy__install() {
             ca-certificates curl gnupg lsb-release
 
         >&2 printf '%s\n' 'Adding APT GPG key for Caddy...'
-        orex curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+        orex curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | orex gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
 
         >&2 printf '%s\n' 'Adding APT repo for Caddy...'
-        orex curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
-
-
+        orex curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | orex tee /etc/apt/sources.list.d/caddy-stable.list
 
         orex apt update
 
@@ -209,10 +202,10 @@ samkz__caddy__install() {
         orex apt install -y caddy
 
     elif [ "$(uname -s)" = "Darwin" ]; then
-      orex samkz__homebrew__install
+        orex samkz__homebrew__install
 
-      >&2 printf '%s\n' 'Installing Caddy...'
-      orex brew install caddy
+        >&2 printf '%s\n' 'Installing Caddy...'
+        orex brew install caddy
     else
         exit "1$(>&2 printf '%s\n' "Windows is not supported. Please try macOS or  Ubuntu Linux.")"
     fi
@@ -293,7 +286,7 @@ samkz__letsencrypt__install() {
     # Using Cloudflare Tokens also requires at least version 2.3.1 of the cloudflare python module. If the version that automatically installed with this plugin is older than that, and you can’t upgrade it on your system, you’ll have to stick to the Global key.
 
     >&2 printf '%s\n' 'Installing Python modules, Certbot and Cloudflare...'
-    orex pip3 install -U cloudflare certbot-nginx certbot-dns-cloudflare
+    orex pip3 install -U cloudflare certbot-dns-cloudflare
 
     orex samkz__letsencrypt__setup
 }
