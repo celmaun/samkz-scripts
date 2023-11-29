@@ -203,12 +203,14 @@ samkz__print_env_prefixed_grep() (
   export -p | orex grep "^export \(${prefix%'\|'}\)"
 )
 
+
 samkz__create_env_file() (
   ${LOCAL__ETC:+:} samkz__local_user_export
   orex [ -d "${LOCAL__ETC:?}" ]
 
   program="$1"; : "${program:?}"
   env_file="${2:-"${LOCAL__ETC:?}/${program:?}.env"}"
+
 
   prefix=
   case "$program" in
@@ -224,8 +226,10 @@ samkz__create_env_file() (
   orex samkz__chown "${env_file:?}"
 
   if [ "$program" = "user" ]; then
-    orex cp -a "${env_file:?}" "${env_file%/*}/admin.env"
-    orex sed -i 's/^LOCAL__/ADMIN__/g' "${env_file%/*}/admin.env"
+    admin_env_file="${env_file%/*}/admin.env"
+
+    orex cp -a "${env_file:?}" "${admin_env_file:?}"
+    orex sed -i.bak -e 's/^LOCAL__/ADMIN__/g' -- "${admin_env_file:?}" && rm -f -- "${admin_env_file:?}.bak"
   fi
 )
 #
