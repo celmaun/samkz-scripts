@@ -292,49 +292,23 @@ samkz__letsencrypt__install() {
 }
 
 samkz__letsencrypt__setup() {
-
     orex samkz__letsencrypt__export
 
-    orex [ -d "${MAIN__LETSENCRYPT__CONFIG_DIR:?}" ]
-    orex [ -d "${MAIN__LETSENCRYPT__RENEWAL_DIR:?}" ]
-    orex [ -d "${MAIN__LETSENCRYPT__LIVE_DIR:?}" ]
-    orex [ -d "${MAIN__LETSENCRYPT__WORK_DIR:?}" ]
-    orex [ -d "${MAIN__LETSENCRYPT__LOGS_DIR:?}" ]
+    set -- \
+        "${MAIN__LETSENCRYPT__CONFIG_DIR:?}" \
+        "${MAIN__LETSENCRYPT__RENEWAL_DIR:?}" \
+        "${MAIN__LETSENCRYPT__LIVE_DIR:?}" \
+        "${MAIN__LETSENCRYPT__WORK_DIR:?}" \
+        "${MAIN__LETSENCRYPT__LOGS_DIR:?}" ;
 
-    if [ "$(id -urn)" = "root" ]; then
-        orex chgrp -R "$(get_super_group)" \
-            "${MAIN__LETSENCRYPT__CONFIG_DIR:?}" \
-            "${MAIN__LETSENCRYPT__RENEWAL_DIR:?}" \
-            "${MAIN__LETSENCRYPT__LIVE_DIR:?}" \
-            "${MAIN__LETSENCRYPT__WORK_DIR:?}" \
-            "${MAIN__LETSENCRYPT__LOGS_DIR:?}"
+    for d; do 
+        orex [ -d "${d:?}" ]
 
-        orex chmod -R g+rwX \
-            "${MAIN__LETSENCRYPT__CONFIG_DIR:?}" \
-            "${MAIN__LETSENCRYPT__RENEWAL_DIR:?}" \
-            "${MAIN__LETSENCRYPT__LIVE_DIR:?}" \
-            "${MAIN__LETSENCRYPT__WORK_DIR:?}" \
-            "${MAIN__LETSENCRYPT__LOGS_DIR:?}"
-    fi
-
-
-    #   orex [ -n "${LEWP__CLOUDFLARE_DNS_API_KEY-}" ]
-    #   cf_dns_creds_lensify_ai="${LOCAL__HOME:?}/.cf-dns-creds/lensify.ai.ini"
-    #   orex mkdir -p "${cf_dns_creds_lensify_ai%/*}"
-    #   # (umask 0077; printf 'dns_cloudflare_api_token=%s\n' 'XXXXXXX' > ~/.cf-dns-creds/lensify.ai.ini ;)
-    #   (umask 0077; printf 'dns_cloudflare_api_token=%s\n' "${LEWP__CLOUDFLARE_DNS_API_KEY:?}" > "${cf_dns_creds_lensify_ai:?}"; )
-    # chown -R "$LOCAL__USER:" "${cf_dns_creds_lensify_ai%/*}"
-    #  #orex sudo certbot certonly \
-    #   sudo certbot certonly \
-    #     --verbose \
-    #     --keep-until-expiring \
-    #     --agree-tos \
-    #     --no-eff-email \
-    #     --non-interactive \
-    #     --dns-cloudflare \
-    #     --dns-cloudflare-credentials "${cf_dns_creds_lensify_ai:?}" \
-    #     -d 'lensify.ai' -d '*.lensify.ai'
-
+        if [ "$(id -urn)" = "root" ]; then
+            orex chgrp -R "$(get_super_group)" "${d:?}"
+            orex chmod -R g+rwX "${d:?}"
+        fi
+    done
 }
 
 samkz__letsencrypt__export() {
