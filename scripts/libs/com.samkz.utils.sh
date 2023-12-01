@@ -94,6 +94,34 @@ is_amd64() {
     is_amd64
 }
 
+
+is_sed_inplace_spaced() { 
+    set -a
+    case "$(2>&1 sed --help ||:)" in 
+        (*'-i[SUFFIX]'*) { is_sed_inplace_spaced() { return 1; }; };;
+        (*) { is_sed_inplace_spaced() { return 0; }; };;
+    esac
+    set +a
+
+    is_sed_inplace_spaced
+}
+
+sed_bak() {
+    if is_sed_inplace_spaced; then
+        set -- -i "$@"
+    else
+        in_place="-i$(quote "${1-}")"; shift
+        set -- "$in_place" "$@"
+        unset in_place
+    fi
+   
+    command sed "$@"
+}
+
+sed_nobak() {
+    sed_bak '' "$@"
+}
+
 ## macOS id command ##
 #     -P      Display the id as a password file entry.
 # EXAMPLES
