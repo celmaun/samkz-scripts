@@ -3,7 +3,7 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2317,SC2043
 
-{ type com_samkz_web_servers_sh && return; } >/dev/null 2>&1
+{ [ -n "${-##*i*}" ] && type com_samkz_web_servers_sh && return; } >/dev/null 2>&1
 
 set -a
 
@@ -314,10 +314,10 @@ samkz__letsencrypt__setup() {
 samkz__letsencrypt__export() {
   ${LOCAL__ETC:+:} orex samkz__local_user_export
 
-  #   -c CONFIG_FILE, --config CONFIG_FILE
-  #                     path to config file (default: /etc/letsencrypt/cli.ini
-  #                     and ~/.config/letsencrypt/cli.ini)
-  # # --config-dir CONFIG_DIR Configuration directory. (default: /etc/letsencrypt)
+    #   -c CONFIG_FILE, --config CONFIG_FILE
+    #                     path to config file (default: /etc/letsencrypt/cli.ini
+    #                     and ~/.config/letsencrypt/cli.ini)
+    # --config-dir CONFIG_DIR Configuration directory. (default: /etc/letsencrypt)
     # --work-dir WORK_DIR   Working directory. (default: /var/lib/letsencrypt)
     # --logs-dir LOGS_DIR   Logs directory. (default: /var/log/letsencrypt)
     set -a
