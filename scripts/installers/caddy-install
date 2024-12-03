@@ -110,7 +110,7 @@ caddy_install() (
 
   has_PATH() {
     ${1:+:} return 1
-    case ":$PATH:" in *:"${1:?}":*) return 0;; esac
+    case ":$PATH:" in *:"${1:?}":*) return 0 ;; esac
     return 1
   }
 
@@ -319,6 +319,35 @@ canon_exe() { [ -f "$1" ] && [ -x "$1" ] && readlink -f -- "$1"; }
 is_binary() ([ -f "${1:?}" ] && case "$(orex file "${1:?}")" in *executable*) exit 0 ;; *) exit 1 ;; esac)
 add_path() { [ -n "$1" ] && case ":$PATH:" in *":$1:"*) ;; *) PATH="${1}${PATH:+:$PATH}" ;; esac }
 
+# $1 = directory containing `${vhost}.Caddyfile` or '.' if not provided
+caddy_up() (
+  set -a
+  orex() { "$@" || exit "$?$(printf >&2 'ERROR[%d]: %s\n' "$?" "$*")"; }
+  oret() { "$@" || return "$?$(printf >&2 'ERROR[%d]: %s\n' "$?" "$*")"; }
+  set +a
+
+  d="$(readlink -f "${1:-.}")"
+  f="$d"
+
+  orex [ -d "$d" ]
+
+  for f in "$d"/*.Caddyfile; do break; done
+  while [ ! -f "$f" ]; do
+    d="${d%/*}"
+    orex [ -n "$d" ]
+    for f in "$d"/*.Caddyfile; do break; done
+  done
+
+  orex [ -f "$f" ]
+
+  vhost="$(basename "${f%.Caddyfile}")"
+  f="$(readlink -f "$f")"
+
+  orex ln -s "$f" "$CADDY__SITES/${vhost}"
+
+  exec "$caddy" reload --config "$config" --force
+)
+
 set +a
 
 set +e -u
@@ -347,6 +376,10 @@ if "$caddy" list-modules -s | grep -Fq 'dns.providers.cloudflare'; then :; else
 fi
 
 case "${1:-start}" in
+up) {
+  shift
+  caddy_up "$@"; exit $?
+} ;;
 run) {
   shift
   set -- run --config "$config" --envfile "$envfile" --pidfile "$pidfile" --watch "$@"
