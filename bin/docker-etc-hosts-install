@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# vim:set ft=bash ts=4 sw=4 et :
+# shellcheck shell=bash
+# shellcheck disable=SC2317
+
+set -a
+
+orex() { "$@" || exit "$?$(printf >&2 '^ ERROR[%d]: %s\n' "$?" "$*")"; }
+oret() { "$@" || return "$?$(printf >&2 '^ ERROR[%d]: %s\n' "$?" "$*")"; }
+
+sed_inplace() {
+  case $(sed --help 2>&1) in
+  *GNU*) sed -i "$@" || return ;;
+  *) sed -i '' "$@" || return ;;
+  esac
+}
+
+docker_etc_hosts_file() {
+  printf '%s\n' "/etc/hosts"
+}
+
+docker_etc_hosts_clear() {
+  orex sed_inplace '/#START_DOCKER_ETC_HOSTS#/,/#END_DOCKER_ETC_HOSTS#/d' "$(docker_etc_hosts_file)"
+}
+
+docker_etc_hosts_entries() {
+  # Docker prefixes container names with a slash
+  # First sed is to remove containers with empty IP (slash prefixed lines)
+  # Second sed replaces slash prefix in container names with spaces
+
+  printf '%s\n' "#START_DOCKER_ETC_HOSTS#"
+  docker ps -a --format "{{.Names}}" |
+    xargs -I {} sh -c 'docker inspect -f "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}{{.Name}}.localhost" {}' |
+    sed '/^\//d' |
+    sed 's@/@    @g'
+  printf '%s\n' "#END_DOCKER_ETC_HOSTS#"
+}
+
+docker_etc_hosts_install() {
+  orex docker_etc_hosts_clear
+  docker_etc_hosts_entries >>"$(docker_etc_hosts_file)"
+}
+
+set +a
+
+orex docker_etc_hosts_install
